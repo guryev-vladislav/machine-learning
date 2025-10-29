@@ -15,4 +15,4 @@ Multi-output U-Net for simultaneous digit segmentation and classification on MNI
 pip install tensorflow matplotlib seaborn numpy h5py
 
 # Run complete pipeline (dataset generation + training)
-python run_pipeline.py
+python run_unet_pipeline.py
