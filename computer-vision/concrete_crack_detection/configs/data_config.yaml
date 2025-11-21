@@ -1,0 +1,27 @@
+# configs/data_config.yaml
+datasets:
+  deepcrack:
+    path: "data/external/deepcrack"
+    image_size: [512, 512]
+    train_test_split: true
+
+  metu:
+    path: "data/external/metu"
+    image_size: [512, 512]
+    train_split: 0.8
+
+  sdnet2018:
+    path: "data/external/sdnet2018"
+    image_size: [224, 224]
+    classes: ["no_crack", "crack"]
+
+augmentations:
+  train:
+    horizontal_flip: true
+    vertical_flip: true
+    rotation: true
+    brightness_contrast: true
+    gaussian_noise: true
+
+  validation:
+    resize_only: true
