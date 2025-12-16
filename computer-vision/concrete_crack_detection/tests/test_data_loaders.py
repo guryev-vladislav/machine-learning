@@ -1,95 +1,93 @@
+import pytest
 import sys
+import os
 from pathlib import Path
-import logging
-import torch
 import numpy as np
 
-# Добавляем корневую директорию проекта в путь для импорта
-sys.path.append(str(Path(__file__).resolve().parent.parent / 'src'))
+# --- 1. Настройка путей для импорта ---
+# Добавляем корневую директорию проекта в путь для импорта модулей,
+# что позволяет импортировать 'src.data_loaders.deepcrack_loader'
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-# Импортируем загрузчики (предполагаем, что они находятся в src/data_loaders)
+# Импорт загрузчиков с префиксом 'src'
 try:
-    from data_loaders.deepcrack_loader import DeepCrackDataset
-    from data_loaders.sdnet_loader import SDNETDataset
+    from src.data_loaders.deepcrack_loader import DeepCrackDataset
+    from src.data_loaders.sdnet_loader import SDNETDataset
 except ImportError as e:
-    print(f"❌ Ошибка импорта: Не удалось найти модули DeepCrackDataset или SDNETDataset. Проверьте пути в sys.path.")
-    print(e)
-    sys.exit(1)
-
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-logger = logging.getLogger(__name__)
-
-# --- КОНФИГУРАЦИЯ ПУТЕЙ ---
-# !!! ВНИМАНИЕ: Замените эти пути на фактические пути к вашим данным !!!
-DEEPCACK_ROOT = Path("/home/guryev/Git/machine-learning/computer-vision/concrete_crack_detection/data/external/deepcrack")
-SDNET_ROOT = Path("/home/guryev/Git/machine-learning/computer-vision/concrete_crack_detection/data/external/sdnet2018")
+    pytest.fail(f"Ошибка импорта: Не удалось найти модули DeepCrackDataset или SDNETDataset. {e}")
 
 
-# --- КОНФИГУРАЦИЯ ПУТЕЙ ---
+# --- 2. ФИКСТУРЫ ДЛЯ ПУТЕЙ ---
+
+# Используйте эти фикстуры для инъекции путей в тесты
+@pytest.fixture(scope="session")
+def deepcrack_data_path():
+    """Возвращает путь к корневой папке датасета DeepCrack."""
+    return Path("/home/guryev/Git/machine-learning/computer-vision/concrete_crack_detection/data/external/deepcrack")
 
 
-def test_deepcrack(data_path):
-    logger.info(f"\n--- Тестирование DeepCrack (Сегментация) ---")
-    if not data_path.exists():
-        logger.error(f"❌ Директория не найдена: {data_path}")
-        return
+@pytest.fixture(scope="session")
+def sdnet_data_path():
+    """Возвращает путь к корневой папке датасета SDNET2018."""
+    return Path("/home/guryev/Git/machine-learning/computer-vision/concrete_crack_detection/data/external/sdnet2018")
 
+
+# --- 3. ТЕСТЫ ---
+
+def test_deepcrack_initialization(deepcrack_data_path):
+    """Проверяет инициализацию и получение элемента из DeepCrackDataset (задача Сегментации)."""
+
+    if not deepcrack_data_path.exists():
+        pytest.skip(f"Директория DeepCrack не найдена: {deepcrack_data_path}. Пропуск теста.")
+
+    # Предполагаем train_ratio=0.8, как в DeepCrackDataset по умолчанию
     try:
-        # Создаем обучающий набор
-        train_dataset = DeepCrackDataset(data_path, is_train=True)
-        test_dataset = DeepCrackDataset(data_path, is_train=False)
+        train_dataset = DeepCrackDataset(deepcrack_data_path, is_train=True)
+        test_dataset = DeepCrackDataset(deepcrack_data_path, is_train=False)
 
-        logger.info(f"Путь: {data_path.name}")
-        logger.info(f"Набор Train: {len(train_dataset)} образцов")
-        logger.info(f"Набор Test: {len(test_dataset)} образцов")
+        assert len(train_dataset) > 0, "Обучающий набор DeepCrack пуст."
+        assert len(test_dataset) > 0, "Тестовый набор DeepCrack пуст."
 
         # Тестируем первый элемент
         image, mask = train_dataset[0]
 
         # Проверяем типы и размеры
-        assert isinstance(image, np.ndarray), "Image must be NumPy array"
-        assert isinstance(mask, np.ndarray), "Mask must be NumPy array"
-        assert image.ndim == 3 and image.shape[2] == 3, "Image must be (H, W, 3)"
-        assert mask.ndim == 2, "Mask must be (H, W)"
-        assert image.shape[:2] == mask.shape, "Image and Mask shapes must match"
-
-        logger.info(f"✅ DeepCrack - Успех. Image Shape {image.shape}, Mask Shape {mask.shape}")
+        assert isinstance(image, np.ndarray), "Изображение должно быть массивом NumPy."
+        assert isinstance(mask, np.ndarray), "Маска должна быть массивом NumPy."
+        assert image.ndim == 3 and image.shape[2] == 3, "Изображение должно иметь форму (H, W, 3)."
+        assert mask.ndim == 2, "Маска должна иметь форму (H, W)."
+        assert image.shape[:2] == mask.shape, "Формы Изображения и Маски должны совпадать."
 
     except Exception as e:
-        logger.error(f"❌ DeepCrack - Ошибка при загрузке или проверке: {e}")
+        pytest.fail(f"Ошибка при загрузке или проверке DeepCrackDataset: {e}")
 
 
-def test_sdnet(data_path):
-    logger.info(f"\n--- Тестирование SDNET2018 (Классификация) ---")
-    if not data_path.exists():
-        logger.error(f"❌ Директория не найдена: {data_path}")
-        return
+def test_sdnet_initialization(sdnet_data_path):
+    """Проверяет инициализацию и получение элемента из SDNETDataset (задача Классификации)."""
+
+    if not sdnet_data_path.exists():
+        pytest.skip(f"Директория SDNET2018 не найдена: {sdnet_data_path}. Пропуск теста.")
 
     try:
-        # Создаем полный набор
-        full_dataset = SDNETDataset(data_path)
+        # Создаем полный набор (SDNETDataset не использует is_train для сплита)
+        full_dataset = SDNETDataset(sdnet_data_path)
 
-        logger.info(f"Путь: {data_path.name}")
-        logger.info(f"Общий размер набора: {len(full_dataset)} образцов")
+        assert len(full_dataset) > 0, "Набор SDNET2018 пуст."
 
-        # Тестируем первый элемент (должен быть с трещиной - label 1)
+        # Тестируем элементы
         image_c, label_c = full_dataset[0]
-        # Тестируем последний элемент (должен быть без трещины - label 0, если данные отсортированы)
         image_u, label_u = full_dataset[-1]
 
-        # Проверяем типы и размеры
-        assert isinstance(image_c, np.ndarray), "Image must be NumPy array"
-        assert isinstance(label_c, (int, float, np.int64, np.float32)), "Label must be scalar"
-        assert image_c.ndim == 3 and image_c.shape[2] == 3, "Image must be (H, W, 3)"
+        # Проверяем типы и размеры для первого элемента
+        assert isinstance(image_c, np.ndarray), "Изображение должно быть массивом NumPy."
+        assert isinstance(label_c, (int, float, np.int64, np.float32)), "Метка должна быть скаляром."
+        assert image_c.ndim == 3 and image_c.shape[2] == 3, "Изображение должно иметь форму (H, W, 3)."
 
-        logger.info(f"✅ SDNET - Успех. Image Shape {image_c.shape}, Label (Cracked) {label_c}")
-        logger.info(f"✅ SDNET - Успех. Image Shape {image_u.shape}, Label (Uncracked) {label_u}")
+        # Проверяем ожидаемые метки
+        assert label_c == 1, "Первый элемент должен быть 'Cracked' (метка 1)."
+        assert label_u == 0, "Последний элемент должен быть 'Non-cracked' (метка 0)."
 
     except Exception as e:
-        logger.error(f"❌ SDNET - Ошибка при загрузке или проверке: {e}")
-
-
-if __name__ == "__main__":
-    test_deepcrack(DEEPCACK_ROOT)
-    test_sdnet(SDNET_ROOT)
+        pytest.fail(f"Ошибка при загрузке или проверке SDNETDataset: {e}")
