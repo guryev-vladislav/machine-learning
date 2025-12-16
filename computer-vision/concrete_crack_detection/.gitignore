@@ -3,7 +3,7 @@ data/processed/
 data/external/
 
 # Models and results
-models/*
+src/models/*
 results/
 
 # Python
