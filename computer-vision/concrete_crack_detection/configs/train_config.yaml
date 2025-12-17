@@ -1,0 +1,24 @@
+project:
+  name: "concrete_crack_detection"
+  base_path: "/home/guryev/Git/machine-learning/computer-vision/concrete_crack_detection"
+
+paths:
+  deepcrack: "data/external/deepcrack"
+  sdnet: "data/external/sdnet2018"
+  checkpoints: "outputs/checkpoints"
+
+models:
+  unet:
+    weights_name: "unet_best.pth"
+    patch_size: 256
+  cnn:
+    weights_name: "cnn_best.pth"
+    image_size: 256
+
+training:
+  device: "cuda:0"
+  batch_size: 4        # Попробуем начать с 2. Если будет летать — поднимем до 4.
+  num_workers: 0       # Важно: 0 воркеров потребляет меньше памяти
+  learning_rate: 0.0003
+  epochs: 5
+  pos_weight: 5.0

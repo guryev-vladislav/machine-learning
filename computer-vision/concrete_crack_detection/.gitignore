@@ -3,8 +3,7 @@ data/processed/
 data/external/
 
 # Models and results
-src/models/*
-results/
+outputs/*
 
 # Python
 __pycache__/

@@ -1,78 +1,54 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
-# --- Вспомогательный Блок Свертки (ConvBlock) ---
-class ConvBlock(nn.Module):
-    """
-    Простой блок, состоящий из свертки, BatchNorm и ReLU.
-    """
+class ResBlock(nn.Module):
+    """Остаточный блок для предотвращения затухания градиента."""
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
+    def __init__(self, in_ch, out_ch, stride=1):
         super().__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x):
-        return self.block(x)
-
-
-# --- Основная Архитектура SimpleCNN ---
-class SimpleCNN(nn.Module):
-    """
-    Простая сверточная нейронная сеть для бинарной классификации.
-    Предназначена для датасета SDNET2018 (трещина/нет трещины).
-    """
-
-    def __init__(self, n_channels, n_classes):
-        """
-        n_channels: 3 (RGB)
-        n_classes: 1 (для бинарной классификации с Sigmoid)
-        """
-        super().__init__()
-        self.n_channels = n_channels
-        self.n_classes = n_classes
-
-        # 1. Сверточный Блок (Извлечение признаков)
-        self.features = nn.Sequential(
-            ConvBlock(n_channels, 32),
-            nn.MaxPool2d(2, 2),  # 256 -> 128
-
-            ConvBlock(32, 64),
-            nn.MaxPool2d(2, 2),  # 128 -> 64
-
-            ConvBlock(64, 128),
-            nn.MaxPool2d(2, 2),  # 64 -> 32
-
-            ConvBlock(128, 256),
-            nn.MaxPool2d(2, 2),  # 32 -> 16
-
-            ConvBlock(256, 256),  # Финальный размер: 256 x 16 x 16
-        )
-
-        # 2. Классификатор (Полносвязные слои)
-        # Входной размер: 16 * 16 * 256 = 65536
-
-        self.classifier = nn.Sequential(
-            # ИСПРАВЛЕНИЕ: Изменено с 512 на 256 для попадания в диапазон 15M-18M
-            nn.Linear(256 * 16 * 16, 256),
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),  # Для регуляризации
-            nn.Linear(256, n_classes)  # Финальный выход - n_classes (1)
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_ch)
+        )
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_ch != out_ch:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch)
+            )
+
+    def forward(self, x):
+        return nn.functional.relu(self.conv(x) + self.shortcut(x))
+
+
+class SimpleCNN(nn.Module):
+    def __init__(self, n_channels=3, n_classes=1):
+        super().__init__()
+        self.prep = nn.Sequential(
+            nn.Conv2d(n_channels, 32, 7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, stride=2, padding=1)
+        )
+        self.layer1 = ResBlock(32, 64, stride=2)
+        self.layer2 = ResBlock(64, 128, stride=2)
+        self.layer3 = ResBlock(128, 256, stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.Dropout(0.5),
+            nn.Linear(128, n_classes)
         )
 
     def forward(self, x):
-        # 1. Извлечение признаков
-        x = self.features(x)
-
-        # 2. Динамическое определение размера для Flatten
-        x = torch.flatten(x, 1)
-
-        # 3. Классификация
-        logits = self.classifier(x)
-
-        return logits
+        x = self.prep(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.avgpool(x).view(x.size(0), -1)
+        return self.fc(x)
