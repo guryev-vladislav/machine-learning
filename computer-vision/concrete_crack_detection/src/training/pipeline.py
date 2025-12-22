@@ -1,120 +1,112 @@
-import torch
-import logging
-import datetime
-import shutil
-import json
 import sys
-import cv2
+import logging
 from pathlib import Path
+import torch
+import cv2
+import numpy as np
+from datetime import datetime
 
 # Настройка путей
 project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-logger = logging.getLogger(__name__)
+from src.utils.config import Config
+from src.training.trainer import Trainer
+from src.utils.visualizer import save_training_history, save_multiscale_comparison
 
-# Безопасные импорты вынесены из функций
-try:
-    from src.training.trainer import Trainer
-    from src.utils.config import Config
-    from src.utils.visualizer import save_learning_curves, save_detailed_inference
-    from src.models.unet import UNet
-    from src.models.classifier import SimpleCNN
-except ImportError as e:
-    logger.error(f"Import error in pipeline.py: {e}")
-    sys.exit(1)
+logger = logging.getLogger(__name__)
 
 
 class TrainingPipeline:
-    def __init__(self, config):
-        self.config = config
-        self.device = config.DEVICE
-        # Фиксация timestamp для использования во всех методах (устраняет Unresolved reference)
-        self.timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    def __init__(self):
+        self.config = Config()
+        self.device = self.config.DEVICE
 
-        self.run_dir = Path("outputs") / f"RUN_{self.timestamp}"
-        self.plots_dir = self.run_dir / "plots"
-        self.weights_dir = self.run_dir / "weights"
+        # --- Создаем структуру папок OUTPUTS ---
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.base_run_dir = Path(project_root) / "outputs" / f"run_{run_id}"
+        self.checkpoints_dir = self.base_run_dir / "models"
+        self.plots_dir = self.base_run_dir / "plots"
 
-        for d in [self.plots_dir, self.weights_dir]:
+        for d in [self.checkpoints_dir, self.plots_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
-        self.unet = None
-        self.classifier = None
-        self._backup_config()
-
-    def _backup_config(self):
-        cfg_path = Path("configs/train_config.yaml")
-        if cfg_path.exists():
-            shutil.copy(cfg_path, self.run_dir / "train_config.yaml")
+        logger.info(f"All data for this run will be saved in: {self.base_run_dir}")
 
     def train_segmentation(self):
         logger.info("Stage 1: UNet Segmentation Training")
         trainer = Trainer(task='segmentation')
-        history, weights = trainer.train()
-        torch.save(weights, self.weights_dir / "unet_final.pth")
-        save_learning_curves(history, self.run_dir, "UNet_Segmentation")
+        history = trainer.train()
+
+        # Сохраняем модель в папку запуска
+        trainer.save_checkpoint(self.checkpoints_dir / "unet_final.pth")
+        save_training_history(history, "unet_training", self.plots_dir)
         return history
 
     def train_classification(self):
         logger.info("Stage 2: CNN Classification Training")
         trainer = Trainer(task='classification')
-        history, weights = trainer.train()
-        torch.save(weights, self.weights_dir / "classifier_final.pth")
-        save_learning_curves(history, self.run_dir, "CNN_Classification")
+        history = trainer.train()
+
+        # Сохраняем модель в папку запуска
+        trainer.save_checkpoint(self.checkpoints_dir / "classifier_final.pth")
+        save_training_history(history, "cnn_training", self.plots_dir)
         return history
 
-    def run_inference(self, test_image_path):
-        """Создает комплексную научную панель анализа"""
-        if not test_image_path or not Path(test_image_path).exists():
-            logger.error(f"Test image not found at: {test_image_path}")
+    def run_multiscale_test(self, test_image_path):
+        """Тестирование на разных масштабах с сохранением исходника"""
+        logger.info(f"Running multiscale test for: {test_image_path}")
+
+        # Проверка существования файла
+        if not Path(test_image_path).exists():
+            logger.error(f"File not found: {test_image_path}")
             return
 
-        # Инициализация моделей (веса берутся из текущей сессии обучения)
-        if self.unet is None:
-            self.unet = UNet(n_channels=3, n_classes=1).to(self.device)
-            self.unet.load_state_dict(torch.load(self.weights_dir / "unet_final.pth"))
-        if self.classifier is None:
-            self.classifier = SimpleCNN(n_channels=3, n_classes=1).to(self.device)
-            self.classifier.load_state_dict(torch.load(self.weights_dir / "classifier_final.pth"))
+        from src.models.unet import UNet
+        from src.models.classifier import SimpleCNN
 
-        self.unet.eval()
-        self.classifier.eval()
+        unet = UNet(n_channels=3, n_classes=1).to(self.device)
+        classifier = SimpleCNN(n_channels=3, n_classes=1).to(self.device)
 
-        # Загрузка и препроцессинг
+        unet.load_state_dict(torch.load(self.checkpoints_dir / "unet_final.pth"))
+        classifier.load_state_dict(torch.load(self.checkpoints_dir / "classifier_final.pth"))
+
+        unet.eval()
+        classifier.eval()
+
         img = cv2.imread(str(test_image_path))
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        sz = self.config.PATCH_SIZE
-        img_res = cv2.resize(img_rgb, (sz, sz))
 
-        tensor = torch.from_numpy(img_res.transpose(2, 0, 1)).float().unsqueeze(0).to(self.device) / 255.0
+        scales = {"Original": 256, "Medium": 128, "Small": 64}
+        results = []
 
-        with torch.no_grad():
-            mask = torch.sigmoid(self.unet(tensor)).cpu().numpy()[0, 0]
-            prob = torch.sigmoid(self.classifier(tensor)).item()
+        for name, size in scales.items():
+            img_res = cv2.resize(img_rgb, (size, size))
+            img_input = cv2.resize(img_res, (self.config.PATCH_SIZE, self.config.PATCH_SIZE))
 
-        # Гибридная логика вердикта
-        is_cracked = prob > 0.5 or (mask > 0.5).sum() > 100
+            tensor = torch.from_numpy(img_input.transpose(2, 0, 1)).float().unsqueeze(0).to(self.device) / 255.0
+            # Нормализация
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(self.device)
+            std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(self.device)
+            tensor = (tensor - mean) / std
 
-        save_detailed_inference(img_res, mask, prob, is_cracked, self.plots_dir, Path(test_image_path).stem)
-        logger.info(f"Scientific report generated for {Path(test_image_path).name}")
+            with torch.no_grad():
+                mask = torch.sigmoid(unet(tensor)).cpu().numpy()[0, 0]
+                prob = torch.sigmoid(classifier(tensor)).item()
+
+            results.append({
+                'image': img_input,
+                'mask': mask,
+                'prob': prob,
+                'scale_name': name
+            })
+
+        # Передаем исходное изображение img_rgb отдельно для визуализации
+        save_multiscale_comparison(results, self.plots_dir, Path(test_image_path).stem, original_img=img_rgb)
 
     def run_full_experiment(self, test_image=None):
-        h_seg = self.train_segmentation()
-        h_cls = self.train_classification()
-
+        self.train_segmentation()
+        self.train_classification()
         if test_image:
-            self.run_inference(test_image)
-
-        summary = {
-            "date": self.timestamp,
-            "metrics": {
-                "unet_final_iou": h_seg['metric'][-1],
-                "cnn_final_acc": h_cls['metric'][-1]
-            },
-            "config_snapshot": self.config.data['training']
-        }
-        with open(self.run_dir / "summary.json", "w", encoding='utf-8') as f:
-            json.dump(summary, f, indent=4, ensure_ascii=False)
-        logger.info(f"Experiment cycle complete. Results in {self.run_dir}")
+            self.run_multiscale_test(test_image)

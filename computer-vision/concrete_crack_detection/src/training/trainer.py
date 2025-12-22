@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 # Безопасные импорты
 try:
     from src.utils.config import Config
-    from src.data_loaders.deepcrack_loader import DeepCrackDataset
-    from src.data_loaders.sdnet_loader import SDNETDataset
+    from src.data_loaders.unified_loader import UnifiedCrackDataset
     from src.models.unet import UNet
     from src.models.classifier import SimpleCNN
+    from src.utils.metrics import calculate_metrics
+    from src.utils.losses import CombinedLoss  # Импортируем наш комбинированный лосс
 except ImportError as e:
     logger.error(f"Error importing in trainer.py: {e}")
     sys.exit(1)
@@ -35,80 +36,78 @@ class Trainer:
         self.lr = lr or self.config.LR
         self.device = self.config.DEVICE
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         t_size = (self.config.PATCH_SIZE, self.config.PATCH_SIZE)
 
-        if task == 'segmentation':
-            self.model = UNet(n_channels=3, n_classes=1).to(self.device)
-            self.dataset = DeepCrackDataset(self.config.DEEPCRACK_PATH, target_size=t_size)
-            self.criterion = nn.BCEWithLogitsLoss()
-        else:
-            self.model = SimpleCNN(n_channels=3, n_classes=1).to(self.device)
-            self.dataset = SDNETDataset(self.config.SDNET_PATH, target_size=t_size)
-            p_weight = torch.tensor([self.config.data['training']['pos_weight']]).to(self.device)
-            self.criterion = nn.BCEWithLogitsLoss(pos_weight=p_weight)
+        self.dataset = UnifiedCrackDataset(
+            crack_dir=self.config.DEEPCRACK_PATH,
+            non_crack_dir=self.config.SDNET_PATH,
+            is_train=True,
+            target_size=t_size,
+            task=self.task  # <-- Передаем текущую задачу (segmentation или classification)
+        )
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.train_loader = DataLoader(
             self.dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=self.config.data['training'].get('num_workers', 0),
-            pin_memory=torch.cuda.is_available()
+            num_workers=self.config.NUM_WORKERS,
+            pin_memory=True if "cuda" in str(self.device) else False
         )
+
+        # Внутри __init__ класса Trainer
+        if task == 'segmentation':
+            self.model = UNet(n_channels=3, n_classes=1).to(self.device)
+            self.criterion = CombinedLoss(weight=2.0)  # Dice имеет двойной вес
+        else:
+            self.model = SimpleCNN(n_channels=3, n_classes=1).to(self.device)
+            # Классификатору тоже даем большой вес на трещины
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([10.0]).to(self.device))
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+
+    def train_epoch(self, epoch):
+        self.model.train()
+        running_loss, running_metric = 0.0, 0.0
+
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{self.num_epochs} [{self.task}]")
+
+        for images, masks, labels in pbar:
+            images = images.to(self.device)
+
+            if self.task == 'segmentation':
+                targets = masks.to(self.device)
+            else:
+                targets = labels.to(self.device).view(-1, 1)
+
+            self.optimizer.zero_grad()
+            outputs = self.model(images)
+            loss = self.criterion(outputs, targets)
+            loss.backward()
+            self.optimizer.step()
+
+            running_loss += loss.item()
+            running_metric += self._calculate_metric(outputs, targets)
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
+
+        return running_loss / len(self.train_loader), running_metric / len(self.train_loader)
 
     def _calculate_metric(self, pred, target):
         with torch.no_grad():
-            pred_bin = (torch.sigmoid(pred) > 0.5).float()
             if self.task == 'segmentation':
-                intersection = (pred_bin * target).sum()
-                union = pred_bin.sum() + target.sum() - intersection
-                return (intersection / (union + 1e-7)).item()
+                iou, _ = calculate_metrics(pred, target)
+                return iou
             else:
-                return (pred_bin == target).float().mean().item()
+                pred_labels = (torch.sigmoid(pred) > 0.5).float()
+                return (pred_labels == target).float().mean().item()
 
     def train(self):
-        self.model.train()
-        logger.info(f"Starting {self.task.upper()} training session")
         history = {'train_loss': [], 'metric': []}
-
         for epoch in range(self.num_epochs):
-            running_loss = 0.0
-            running_metric = 0.0
+            loss, metric = self.train_epoch(epoch)
+            history['train_loss'].append(loss)
+            history['metric'].append(metric)
+            logger.info(f"Epoch {epoch + 1}: Loss={loss:.4f}, Metric={metric:.4f}")
+        return history
 
-            pbar = tqdm(enumerate(self.train_loader),
-                        total=len(self.train_loader),
-                        desc=f"Epoch {epoch + 1}/{self.num_epochs}",
-                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]")
-
-            for i, (images, labels) in pbar:
-                images = images.to(self.device, non_blocking=True)
-                labels = labels.to(self.device, non_blocking=True)
-
-                if self.task == 'segmentation':
-                    if labels.dim() == 3: labels = labels.unsqueeze(1)
-                else:
-                    labels = labels.view(-1, 1)
-
-                self.optimizer.zero_grad()
-                outputs = self.model(images)
-                loss = self.criterion(outputs, labels)
-                loss.backward()
-                self.optimizer.step()
-
-                current_loss = loss.item()
-                current_metric = self._calculate_metric(outputs, labels)
-
-                running_loss += current_loss
-                running_metric += current_metric
-                pbar.set_postfix(loss=f"{current_loss:.4f}", metric=f"{current_metric:.4f}")
-
-            avg_loss = running_loss / len(self.train_loader)
-            avg_metric = running_metric / len(self.train_loader)
-            history['train_loss'].append(avg_loss)
-            history['metric'].append(avg_metric)
-            logger.info(f"Epoch {epoch + 1} summary: Loss={avg_loss:.4f}, Metric={avg_metric:.4f}")
-
-        return history, self.model.state_dict()
+    def save_checkpoint(self, path):
+        torch.save(self.model.state_dict(), path)

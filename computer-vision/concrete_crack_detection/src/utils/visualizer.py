@@ -3,117 +3,111 @@ import numpy as np
 from pathlib import Path
 
 
-def save_learning_curves(history, save_path, task_name):
+def save_training_history(history, task_name, save_dir):
     """
-    Создает графики Loss и Metric для конкретной задачи (UNet или CNN).
-    Используется стандарт оформления для научных публикаций.
+    Сохраняет графики обучения (Loss и Metric).
     """
+    if not isinstance(history, dict) or 'train_loss' not in history:
+        print(f"Error: history format is incorrect for {task_name}")
+        return
+
     epochs = range(1, len(history['train_loss']) + 1)
-    metric_name = 'IoU' if 'segmentation' in task_name.lower() else 'Accuracy'
 
-    plt.figure(figsize=(14, 6))
-    plt.suptitle(f"Training Progress: {task_name}", fontsize=16)
+    plt.figure(figsize=(12, 5))
+    plt.suptitle(f"Training Progress: {task_name}", fontsize=14)
 
-    # Левый график: Loss
+    # График Loss
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, history['train_loss'], 'b-o', linewidth=2, label='Training Loss')
-    plt.xlabel('Epochs', fontsize=12)
-    plt.ylabel('Loss Value', fontsize=12)
-    plt.title('Loss Convergence')
-    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.plot(epochs, history['train_loss'], 'r-o', label='Loss')
+    plt.title("Loss over Epochs")
+    plt.xlabel("Epoch")
     plt.legend()
+    plt.grid(True, alpha=0.3)
 
-    # Правый график: Metric
+    # График Метрики
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, history['metric'], 'g-s', linewidth=2, label=f'Training {metric_name}')
-    plt.xlabel('Epochs', fontsize=12)
-    plt.ylabel(metric_name, fontsize=12)
-    plt.title(f'{metric_name} Improvement')
-    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.plot(epochs, history['metric'], 'g-s', label='Metric')
+    plt.title("Metric Score")
+    plt.xlabel("Epoch")
     plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    save_path = Path(save_dir) / f"{task_name}_curves.png"
+    plt.savefig(save_path)
+    plt.close()
+    print(f"History plot saved to {save_path}")
+
+
+def save_multiscale_comparison(results, save_path, filename, original_img=None):
+    """
+    Создает детальный отчет:
+    Строки = Разные масштабы изображения.
+    Колонки = [Входное фото] | [Результат UNet] | [Вердикт CNN]
+    """
+    n = len(results)
+    # Создаем сетку: n строк (по количеству масштабов), 3 колонки
+    fig, axes = plt.subplots(n, 3, figsize=(15, 5 * n))
+    plt.suptitle(f"Detection Analysis Report: {filename}", fontsize=18, fontweight='bold')
+
+    # Если n=1, matplotlib возвращает одномерный массив осей, превращаем в 2D для удобства
+    if n == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    for i, res in enumerate(results):
+        # --- Колонка 1: Входное изображение (то, что видит модель) ---
+        ax_input = axes[i, 0]
+        ax_input.imshow(res['image'])
+        ax_input.set_title(f"Input ({res['scale_name']})", fontsize=12)
+        ax_input.axis('off')
+
+        # --- Колонка 2: Результат сегментации UNet ---
+        ax_unet = axes[i, 1]
+        ax_unet.imshow(res['image'])
+        # Накладываем маску. Порог 0.05, чтобы видеть "неуверенные" предсказания
+        mask_overlay = np.ma.masked_where(res['mask'] < 0.05, res['mask'])
+        ax_unet.imshow(mask_overlay, alpha=0.6, cmap='jet')
+        ax_unet.set_title("UNet Segmentation Overlay", fontsize=12)
+        ax_unet.axis('off')
+
+        # --- Колонка 3: Вердикт классификатора CNN ---
+        ax_cnn = axes[i, 2]
+        prob = res['prob']
+        color = 'red' if prob > 0.5 else 'green'
+        # Рисуем шкалу уверенности
+        ax_cnn.barh(["Crack Prob"], [prob], color=color, height=0.4)
+        ax_cnn.set_xlim(0, 1)
+        ax_cnn.axvline(x=0.5, color='black', linestyle='--')
+        ax_cnn.set_title(f"CNN Confidence: {prob:.4f}", fontsize=12)
+
+        # Стилизация графика классификации
+        ax_cnn.spines['top'].set_visible(False)
+        ax_cnn.spines['right'].set_visible(False)
+        ax_cnn.set_xlabel("Probability")
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(save_path / f"learning_curves_{task_name.lower()}.png", dpi=300)
+
+    final_path = Path(save_path) / f"{filename}_detailed_report.png"
+    plt.savefig(final_path, dpi=150)
     plt.close()
+    print(f"Detailed multiscale report saved to: {final_path}")
 
 
-def save_detailed_inference(image, mask, prob, is_cracked, save_path, name):
+def save_detailed_inference(image, mask, prob, is_cracked, save_dir, filename):
     """
-    Сохраняет детальный результат инференса:
-    Оригинал | Тепловая карта UNet | Финальный вердикт
+    Сохраняет упрощенный результат (если нужно для одиночных тестов).
     """
-    plt.figure(figsize=(15, 5))
-
-    # 1. Исходное изображение
-    plt.subplot(1, 3, 1)
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
     plt.imshow(image)
-    plt.title("Input Image")
+    mask_visible = np.ma.masked_where(mask < 0.05, mask)
+    plt.imshow(mask_visible, alpha=0.5, cmap='hot')
+    plt.title(f"UNet Mask")
     plt.axis('off')
 
-    # 2. Сегментация (Heatmap)
-    plt.subplot(1, 3, 2)
-    plt.imshow(image)
-    mask_colored = np.ma.masked_where(mask < 0.1, mask)
-    plt.imshow(mask_colored, alpha=0.7, cmap='jet')
-    plt.title("Segmentation (UNet)")
-    plt.axis('off')
+    plt.subplot(1, 2, 2)
+    plt.bar(["CNN Score"], [prob], color='red' if is_cracked else 'green')
+    plt.ylim(0, 1)
+    plt.title(f"Verdict: {'CRACK' if is_cracked else 'CLEAN'}")
 
-    # 3. Уверенность классификатора
-    plt.subplot(1, 3, 3)
-    color = 'red' if is_cracked else 'green'
-    status = "CRACK DETECTED" if is_cracked else "CLEAN"
-
-    plt.bar(["Confidence"], [prob], color=color, alpha=0.6)
-    plt.axhline(y=0.5, color='black', linestyle='--', label='Threshold 0.5')
-    plt.ylim(0, 1.1)
-    plt.title(f"Decision: {status}\nScore: {prob:.4f}")
-    plt.legend()
-
-    plt.tight_layout()
-    plt.savefig(save_path / f"inference_report_{name}.png", dpi=300)
+    plt.savefig(Path(save_dir) / f"inf_{filename}.png")
     plt.close()
-
-    def save_detailed_inference(image, mask, prob, is_cracked, save_path, name):
-        """
-        Создает комплексный отчет: Оригинал | Тепловая карта трещины | Вердикт CNN.
-        Используется строгий стиль оформления без лишних элементов.
-        """
-        plt.figure(figsize=(18, 6))
-
-        # Панель 1: Исходное изображение
-        plt.subplot(1, 3, 1)
-        plt.imshow(image)
-        plt.title("Original Surface Inspection", fontsize=14, pad=15)
-        plt.axis('off')
-
-        # Панель 2: Результат UNet (Segmentation Map)
-        plt.subplot(1, 3, 2)
-        plt.imshow(image)
-        # Наложение маски: используем jet или hot для выделения интенсивности
-        mask_overlay = np.ma.masked_where(mask < 0.1, mask)
-        plt.imshow(mask_overlay, alpha=0.7, cmap='jet', vmin=0, vmax=1)
-        plt.title("UNet Segmentation Overlay", fontsize=14, pad=15)
-        plt.axis('off')
-
-        # Панель 3: Анализ уверенности и финальный вердикт
-        plt.subplot(1, 3, 3)
-        color = 'firebrick' if is_cracked else 'forestgreen'
-        verdict_text = "STATUS: DEFECT DETECTED" if is_cracked else "STATUS: CLEAR"
-
-        # Рисуем шкалу уверенности
-        bars = plt.bar(["Probability Score"], [prob], color=color, alpha=0.8, width=0.5)
-        plt.axhline(y=0.5, color='black', linestyle='--', linewidth=1.5, label='Threshold (0.5)')
-
-        # Добавляем текстовый вердикт под заголовком
-        plt.ylim(0, 1.1)
-        plt.ylabel("Confidence Level", fontsize=12)
-        plt.title(f"{verdict_text}\n(CNN Output: {prob:.4f})", fontsize=14, pad=15, color=color, fontweight='bold')
-        plt.legend(loc='upper right')
-        plt.grid(axis='y', linestyle=':', alpha=0.5)
-
-        plt.tight_layout()
-
-        # Сохранение в высоком качестве для отчетов
-        file_name = f"inference_report_{name}.png"
-        plt.savefig(save_path / file_name, dpi=300, bbox_inches='tight')
-        plt.close()
