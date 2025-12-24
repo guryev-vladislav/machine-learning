@@ -1,31 +1,38 @@
-import cv2
-import numpy as np
-import torch
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-from pathlib import Path
+import os
+import sys
 import logging
-from .base_loader import BaseCrackDataset
 
 logger = logging.getLogger(__name__)
 
+try:
+    import cv2
+    import numpy as np
+    import torch
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+    from pathlib import Path
+    import random
+    from .base_loader import BaseCrackDataset
+except ImportError as e:
+    logger.error(f"Critical import error in {os.path.basename(__file__)}: {e}")
+    sys.exit(1)
+
 
 class UnifiedCrackDataset(BaseCrackDataset):
-    def __init__(self, crack_dir, non_crack_dir, is_train=True, target_size=(256, 256), task='segmentation'):
+    def __init__(self, crack_dir, non_crack_dir, is_train=True, target_size=(256, 256), task='segmentation',
+                 unet_model=None):
         super().__init__(crack_dir, is_train=is_train)
         self.target_size = target_size
-        self.non_crack_dir = Path(non_crack_dir)
-        self.crack_dir = Path(crack_dir)
-        self.task = task  # 'segmentation' или 'classification'
+        self.task = task
+        self.unet_model = unet_model
+        self.crack_dir = Path(crack_dir).resolve()
+        self.non_crack_dir = Path(non_crack_dir).resolve()
 
-        # Настройка аугментаций (важно для сегментации использовать одинаковые для img и mask)
         if self.is_train:
             self.aug = A.Compose([
-                A.RandomResizedCrop(size=target_size, scale=(0.8, 1.0), p=1.0),
+                A.RandomResizedCrop(size=target_size, scale=(0.5, 1.0), p=1.0),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
-                A.RandomRotate90(p=0.5),
-                A.ColorJitter(brightness=0.2, contrast=0.2, p=0.3),
                 A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2()
             ])
@@ -36,72 +43,80 @@ class UnifiedCrackDataset(BaseCrackDataset):
                 ToTensorV2()
             ])
 
-        self._discover_unified_files()
+        self._discover_files()
 
-    def _discover_unified_files(self):
+    def _discover_files(self):
+        crack_images_dir = self.crack_dir / "rgb"
+        crack_masks_dir = self.crack_dir / "BW"
+
+        logger.info(f"Checking images in: {crack_images_dir}")
+
+        exts = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.PNG']
+        all_imgs = []
+        for e in exts:
+            all_imgs.extend(list(crack_images_dir.glob(e)))
+
         self.images, self.masks, self.labels = [], [], []
 
-        # 1. Загружаем DeepCrack (основной источник для сегментации)
-        img_dir = self.crack_dir / "rgb"
-        mask_dir = self.crack_dir / "BW"
+        for img_path in sorted(all_imgs):
+            mask_path = crack_masks_dir / (img_path.stem + ".png")
+            if not mask_path.exists():
+                mask_path = crack_masks_dir / img_path.name
 
-        crack_imgs = list(img_dir.glob("*.jpg")) + list(img_dir.glob("*.png"))
-
-        for p in crack_imgs:
-            # Ищем маску с таким же именем
-            m = mask_dir / f"{p.stem}.png"
-            if not m.exists():
-                m = mask_dir / f"{p.stem}.jpg"
-
-            if m.exists():
-                self.images.append(p)
-                self.masks.append(m)
+            if mask_path.exists():
+                self.images.append(img_path)
+                self.masks.append(mask_path)
                 self.labels.append(1.0)
 
-        crack_count = len(self.images)
-
-        # 2. Добавляем пустые изображения ТОЛЬКО для классификации
-        # Если мы учим UNet, нам нужны только картинки с реальными масками трещин
         if self.task == 'classification':
-            non_crack_imgs = list(self.non_crack_dir.rglob("*Non-cracked/*.jpg"))
-            if not non_crack_imgs:
-                non_crack_imgs = list(self.non_crack_dir.rglob("*.jpg"))
+            non_crack_imgs = []
+            for obj in ["Decks", "Pavements", "Walls"]:
+                nc_dir = self.non_crack_dir / obj / "Non-cracked"
+                if nc_dir.exists():
+                    for e in exts:
+                        non_crack_imgs.extend(list(nc_dir.glob(e)))
 
-            if crack_count > 0 and len(non_crack_imgs) > 0:
-                np.random.seed(42)
-                # Для классификации делаем баланс 1:1
-                num_to_select = min(crack_count, len(non_crack_imgs))
-                selected_indices = np.random.choice(len(non_crack_imgs), num_to_select, replace=False)
-
-                for idx in selected_indices:
-                    self.images.append(non_crack_imgs[idx])
+            if non_crack_imgs:
+                random.seed(42)
+                num_to_select = min(len(non_crack_imgs), len(self.images))
+                selected = random.sample(non_crack_imgs, num_to_select)
+                for path in selected:
+                    self.images.append(path)
                     self.masks.append(None)
                     self.labels.append(0.0)
 
-                logger.info(f"Classification Mode: {crack_count} cracks + {num_to_select} background.")
-        else:
-            logger.info(f"Segmentation Mode: {crack_count} images with target masks loaded.")
+        logger.info(f"Total images found: {len(self.images)}")
 
-        if len(self.images) == 0:
-            raise RuntimeError(f"No images found! Check path: {self.crack_dir}")
+    def __len__(self):
+        return len(self.images)
 
     def __getitem__(self, idx):
-        img_path = self.images[idx]
-        mask_path = self.masks[idx]
+        image_path = str(self.images[idx])
+        raw_img = cv2.imread(image_path)
+        if raw_img is None:
+            logger.error(f"Failed to load image: {image_path}")
+            raise FileNotFoundError(image_path)
 
-        image = cv2.imread(str(img_path))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.cvtColor(raw_img, cv2.COLOR_BGR2RGB)
 
-        if mask_path is not None:
-            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-            # Жесткая бинаризация: все что выше 127 -> 1.0, остальное 0.0
-            mask = (mask > 127).astype(np.float32)
+        if self.masks[idx]:
+            mask = (cv2.imread(str(self.masks[idx]), 0) > 127).astype(np.float32)
         else:
-            # Если маски нет (для пустых фото в CNN), создаем пустую
             mask = np.zeros(image.shape[:2], dtype=np.float32)
 
-        # Синхронная аугментация (Albumentations гарантирует, что кроп на картинке и маске совпадет)
-        augmented = self.aug(image=image, mask=mask)
+        transformed = self.aug(image=image, mask=mask)
+        img_t, mask_t = transformed['image'], transformed['mask']
 
-        # Возвращаем: Изображение, Маску (C,H,W) и Метку (0/1)
-        return augmented['image'], augmented['mask'].unsqueeze(0), torch.tensor([self.labels[idx]], dtype=torch.float32)
+        if self.task == 'classification':
+            if self.unet_model is not None:
+                self.unet_model.eval()
+                with torch.no_grad():
+                    dev = next(self.unet_model.parameters()).device
+                    pred = torch.sigmoid(self.unet_model(img_t.unsqueeze(0).to(dev)))
+                    final_input = (pred > 0.5).float().squeeze(0).repeat(3, 1, 1)
+            else:
+                final_input = mask_t.unsqueeze(0).repeat(3, 1, 1)
+        else:
+            final_input = img_t
+
+        return final_input, mask_t.unsqueeze(0), torch.tensor(self.labels[idx], dtype=torch.float32)

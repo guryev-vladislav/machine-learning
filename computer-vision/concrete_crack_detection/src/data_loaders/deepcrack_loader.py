@@ -1,9 +1,19 @@
-import cv2
-import numpy as np
-import random
-import torch
-from pathlib import Path
-from .base_loader import BaseCrackDataset
+import os
+import sys
+import logging
+
+logger = logging.getLogger(__name__)
+
+try:
+    import cv2
+    import numpy as np
+    import random
+    import torch
+    from pathlib import Path
+    from .base_loader import BaseCrackDataset
+except ImportError as e:
+    logger.error(f"Critical import error in {os.path.basename(__file__)}: {e}")
+    sys.exit(1)
 
 class DeepCrackDataset(BaseCrackDataset):
     def __init__(self, data_dir, transform=None, is_train=True, train_ratio=0.8, seed=42, target_size=(256, 256)):
@@ -18,7 +28,9 @@ class DeepCrackDataset(BaseCrackDataset):
         masks_root = self.data_dir / "BW"
 
         if not images_root.exists() or not masks_root.exists():
-            raise ValueError(f"DeepCrack folders not found in {self.data_dir}")
+            err_msg = f"DeepCrack folders not found in {self.data_dir}"
+            logger.critical(err_msg)
+            raise ValueError(err_msg)
 
         all_image_paths = sorted(list(images_root.glob("*.jpg")) + list(images_root.glob("*.png")))
         stems = [p.stem for p in all_image_paths]
@@ -33,21 +45,23 @@ class DeepCrackDataset(BaseCrackDataset):
 
     def _load_image(self, image_path):
         image = cv2.imread(str(image_path))
-        if image is None: raise FileNotFoundError(f"Image not loaded: {image_path}")
+        if image is None:
+            logger.error(f"Image not loaded: {image_path}")
+            raise FileNotFoundError(f"Image not loaded: {image_path}")
         image = cv2.resize(image, self.target_size)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # Превращаем (H, W, C) в (C, H, W) для PyTorch
         image = image.transpose(2, 0, 1)
         return image.astype(np.float32) / 255.0
 
     def _load_mask(self, mask_path):
         mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-        if mask is None: raise FileNotFoundError(f"Mask not loaded: {mask_path}")
+        if mask is None:
+            logger.error(f"Mask not loaded: {mask_path}")
+            raise FileNotFoundError(f"Mask not loaded: {mask_path}")
         mask = cv2.resize(mask, self.target_size, interpolation=cv2.INTER_NEAREST)
         return (mask > 127).astype(np.float32)
 
     def __getitem__(self, idx):
         img = self._load_image(self.images[idx])
         mask = self._load_mask(self.masks[idx])
-        # Возвращаем уже готовые тензоры
         return torch.from_numpy(img), torch.from_numpy(mask)

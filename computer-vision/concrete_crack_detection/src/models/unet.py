@@ -1,6 +1,15 @@
-import torch
-import torch.nn as nn
+import os
+import sys
+import logging
 
+logger = logging.getLogger(__name__)
+
+try:
+    import torch
+    import torch.nn as nn
+except ImportError as e:
+    logger.error(f"Critical import error in {os.path.basename(__file__)}: {e}")
+    sys.exit(1)
 
 class DoubleConv(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -17,11 +26,9 @@ class DoubleConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-
 class UNet(nn.Module):
     def __init__(self, n_channels=3, n_classes=1):
         super().__init__()
-        # Стартуем с 32 фильтров вместо 64
         self.inc = DoubleConv(n_channels, 32)
         self.down1 = nn.Sequential(nn.MaxPool2d(2), DoubleConv(32, 64))
         self.down2 = nn.Sequential(nn.MaxPool2d(2), DoubleConv(64, 128))

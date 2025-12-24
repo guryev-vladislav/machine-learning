@@ -1,10 +1,17 @@
-import torch
-import torch.nn as nn
+import os
+import sys
+import logging
 
+logger = logging.getLogger(__name__)
+
+try:
+    import torch
+    import torch.nn as nn
+except ImportError as e:
+    logger.error(f"Critical import error in {os.path.basename(__file__)}: {e}")
+    sys.exit(1)
 
 class ResBlock(nn.Module):
-    """Остаточный блок для предотвращения затухания градиента."""
-
     def __init__(self, in_ch, out_ch, stride=1):
         super().__init__()
         self.conv = nn.Sequential(
@@ -23,7 +30,6 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         return nn.functional.relu(self.conv(x) + self.shortcut(x))
-
 
 class SimpleCNN(nn.Module):
     def __init__(self, n_channels=3, n_classes=1):

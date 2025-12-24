@@ -5,20 +5,22 @@ project:
 paths:
   deepcrack: "data/external/deepcrack"
   sdnet: "data/external/sdnet2018"
-  checkpoints: "outputs/checkpoints"
+  checkpoints: "outputs"
 
 models:
   unet:
-    weights_name: "unet_best.pth"
+    weights_name: "unet.pth"
     patch_size: 256
   cnn:
-    weights_name: "cnn_best.pth"
+    weights_name: "cnn.pth"
     image_size: 256
 
 training:
   device: "cuda:0"
-  batch_size: 4        # Попробуем начать с 2. Если будет летать — поднимем до 4.
-  num_workers: 0       # Важно: 0 воркеров потребляет меньше памяти
-  learning_rate: 0.0003
-  epochs: 5
-  pos_weight: 5.0
+  batch_size: 16        # Попробуем начать с 2. Если будет летать — поднимем до 4.
+  num_workers: 0      # Важно: 0 воркеров потребляет меньше памяти
+  learning_rate: 0.0002
+  epochs: 50
+  pos_weight_cnn: 4.0
+  pos_weight_unet: 8.0
+  early_stopping: 8

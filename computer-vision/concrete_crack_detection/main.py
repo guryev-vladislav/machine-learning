@@ -1,25 +1,38 @@
+import os
+import sys
 import logging
-from src.utils.config import Config
-from src.training.pipeline import TrainingPipeline
 
+logger = logging.getLogger(__name__)
+
+try:
+    from src.utils.config import Config
+    from src.training.pipeline import TrainingPipeline
+except ImportError as e:
+    logger.error(f"Critical import error in {os.path.basename(__file__)}: {e}")
+    sys.exit(1)
 
 def main():
-    # Настройка логирования
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
     )
 
-    # Инициализируем пайплайн (теперь без аргументов в скобках)
     pipeline = TrainingPipeline()
 
-    # Путь к тестовой картинке для финального отчета
-    # Убедитесь, что этот файл существует в вашей папке данных
-    sample_img = "data/external/deepcrack/rgb/001.jpg"
+    sample_images = [
+        "data/external/deepcrack/rgb/001.jpg",
+        "data/external/deepcrack/rgb/011.jpg",
+        "data/external/deepcrack/rgb/017.jpg",
+        "data/external/deepcrack/rgb/018.jpg",
+        "data/external/sdnet2018/Decks/Cracked/7001 - 2.jpg",
+        "data/external/sdnet2018/Decks/Cracked/7001 - 17.jpg",
+        "data/external/sdnet2018/Decks/Non-cracked/7001-1.jpg",
+        "data/external/sdnet2018/Decks/Non-cracked/7001-3.jpg",
+        "data/external/sdnet2018/Decks/Non-cracked/7001-4.jpg",
+        "data/external/sdnet2018/Decks/Non-cracked/7001-5.jpg",
+    ]
 
-    # Запуск полного цикла обучения и тестов
-    pipeline.run_full_experiment(test_image=sample_img)
-
+    pipeline.run_full_experiment(test_images_paths=sample_images)
 
 if __name__ == "__main__":
     main()
