@@ -1,0 +1,44 @@
+project:
+  name: "yolo_crack_detection"
+  base_path: "/home/guryev/Git/My/machine-learning/computer-vision/yolo-crack-detection"
+
+paths:
+  raw_videos: "data/raw"
+  generated_videos: "data/videos"
+  dataset_root: "data/dataset"
+  deepcrack: "../concrete_crack_detection/data/external/deepcrack"
+  sdnet: "../concrete_crack_detection/data/external/sdnet2018"
+  outputs: "outputs"
+
+video:
+  fps: 10  # frames per second для созданного видео
+  width: 640
+  height: 480
+  codec: "mp4v"  # или "MJPG"
+
+dataset:
+  train_split: 0.8
+  val_split: 0.2
+  random_seed: 42
+  class_names:
+    - "no_crack"
+    - "crack"
+
+training:
+  device: "cpu"
+  epochs: 50
+  batch_size: 8   # reduced for faster, smaller experiments
+  imgsz: 416      # smaller image size speeds up training
+  learning_rate: 0.001
+  patience: 10
+  workers: 4
+  task: "classify"  # YOLO Classification
+  model: "yolov8n-cls"  # YOLOv8 nano classification (will be auto-downloaded if needed)
+
+inference:
+  confidence_threshold: 0.5
+  iou_threshold: 0.5
+  draw_confident: true
+  output_video_fps: 20
+
+

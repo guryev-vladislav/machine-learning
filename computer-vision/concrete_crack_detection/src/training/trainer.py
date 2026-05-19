@@ -118,7 +118,7 @@ class Trainer:
         running_loss = 0.0
         running_metric = 0.0
 
-        pbar = tqdm(loader, desc=f"Epoch {epoch + 1} [{'Train' if is_train else 'Val'}]")
+        pbar = tqdm(loader, desc=f"Epoch {epoch + 1} [{'Train' if is_train else 'Val'}]", leave=False)
 
         for imgs, masks, labels in pbar:
             imgs, masks, labels = imgs.to(self.device), masks.to(self.device), labels.to(self.device)

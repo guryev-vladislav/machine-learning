@@ -59,11 +59,21 @@ class UnifiedCrackDataset(BaseCrackDataset):
         self.images, self.masks, self.labels = [], [], []
 
         for img_path in sorted(all_imgs):
-            mask_path = crack_masks_dir / (img_path.stem + ".png")
-            if not mask_path.exists():
-                mask_path = crack_masks_dir / img_path.name
-
-            if mask_path.exists():
+            # Try different mask extensions
+            mask_candidates = [
+                crack_masks_dir / (img_path.stem + ".png"),
+                crack_masks_dir / (img_path.stem + ".jpg"),
+                crack_masks_dir / (img_path.stem + ".jpeg"),
+                crack_masks_dir / img_path.name
+            ]
+            
+            mask_path = None
+            for candidate in mask_candidates:
+                if candidate.exists():
+                    mask_path = candidate
+                    break
+            
+            if mask_path:
                 self.images.append(img_path)
                 self.masks.append(mask_path)
                 self.labels.append(1.0)
