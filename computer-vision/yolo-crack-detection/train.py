@@ -13,7 +13,6 @@ from src.models.yolo_crack_detector import YOLOCrackDetector
 from src.utils.visualizer import plot_class_distribution, plot_comprehensive_report
 
 def generate_metrics_report(config, results, detector=None):
-    """Generate and save metrics report from training results"""
     try:
         metrics = {
             'training_date': datetime.now().isoformat(),
@@ -23,14 +22,12 @@ def generate_metrics_report(config, results, detector=None):
             'batch_size': config.BATCH_SIZE,
         }
 
-        # Сохраняем метрики
         metrics_file = config.OUTPUTS_PATH / "metrics.json"
         with open(metrics_file, 'w') as f:
             json.dump(metrics, f, indent=2)
 
         logger.info(f"✓ Metrics saved to {metrics_file}")
 
-        # Сохраняем текстовый отчет
         report_file = config.OUTPUTS_PATH / "training_report.txt"
         with open(report_file, 'w') as f:
             f.write("=" * 60 + "\n")
@@ -46,12 +43,9 @@ def generate_metrics_report(config, results, detector=None):
             f.write(f"  Device: {config.DEVICE}\n")
 
         logger.info(f"✓ Training report saved to {report_file}")
-        # Попробуем дополнительно оценить модель на валидационном наборе
         try:
             from src.utils.metrics import classification_metrics
             import cv2
-
-            # detector может быть передан (рекомендуется) — если нет, попробуем инициализировать новый
             if detector is None:
                 try:
                     detector = YOLOCrackDetector(config=config)
@@ -74,7 +68,6 @@ def generate_metrics_report(config, results, detector=None):
                             if img is None:
                                 continue
                             if detector is None:
-                                # без детектора нельзя получить предсказание
                                 continue
                             res = detector.classify_frame(img)
                             if res is None:
@@ -88,14 +81,11 @@ def generate_metrics_report(config, results, detector=None):
             if y_true and y_scores:
                 cls_metrics = classification_metrics(y_true, y_scores=y_scores, y_pred=y_pred, threshold=config.CONF_THRESHOLD)
                 metrics.update({'classification': cls_metrics})
-                # Сохраняем также удобный JSON
                 try:
                     with open(config.OUTPUTS_PATH / 'classification_metrics.json', 'w') as f:
                         json.dump(cls_metrics, f, indent=2)
                 except Exception as e:
                     logger.warning(f"Could not save classification metrics JSON: {e}")
-
-                # Сохраняем комплексный отчёт (график)
                 try:
                     plot_comprehensive_report(
                         cls_metrics,
@@ -122,10 +112,6 @@ def generate_metrics_report(config, results, detector=None):
 
 
 def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, training_dir: Path):
-    """If the trainer saved per-epoch weights (weights/*.pt), load each epoch's
-    weight file and evaluate on the validation set to compute per-epoch val metrics.
-    The result is saved to outputs as 'per_epoch_val_metrics.json' and plotted.
-    """
     try:
         from src.utils.metrics import classification_metrics
         import cv2
@@ -139,17 +125,13 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
     if not weights_dir.exists():
         logger.info(f"No weights directory found at {weights_dir}")
         return
-
-    # find candidate weight files excluding best.pt and last.pt
     candidates = [p for p in weights_dir.glob('*.pt') if p.name not in ('best.pt', 'last.pt')]
     if not candidates:
-        # try other common patterns
         candidates = [p for p in weights_dir.iterdir() if p.suffix == '.pt' and p.name not in ('best.pt','last.pt')]
     if not candidates:
         logger.info("No per-epoch weight files found (only best.pt/last.pt). Skipping per-epoch eval.")
         return
 
-    # sort by epoch number if present in filename, else by mtime
     def epoch_key(p: Path):
         m = re.search(r"(\d+)", p.name)
         if m:
@@ -170,7 +152,6 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
         try:
             logger.info(f"Evaluating weights: {w}")
             det = YOLOCrackDetector(config=config, model_path=str(w))
-            # iterate val images
             y_true = []
             y_scores = []
             y_pred = []
@@ -195,7 +176,6 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
             if y_true:
                 cls_metrics = classification_metrics(y_true, y_scores=y_scores, y_pred=y_pred, threshold=config.CONF_THRESHOLD)
                 per_epoch_val_acc.append(cls_metrics.get('accuracy', 0.0))
-                # try to extract epoch number
                 m = re.search(r"(\d+)", w.name)
                 if m:
                     epochs.append(int(m.group(1)))
@@ -207,7 +187,6 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
         except Exception as e:
             logger.warning(f"Failed to evaluate {w}: {e}")
 
-    # save results
     out = config.OUTPUTS_PATH / 'per_epoch_val_metrics.json'
     try:
         with open(out, 'w') as f:
@@ -216,13 +195,11 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
     except Exception as e:
         logger.warning(f"Could not save per-epoch metrics JSON: {e}")
 
-    # build training history by loading ultralytics results.csv if exists
     results_csv = Path(training_dir) / 'results.csv'
     history = None
     if results_csv.exists():
         history = load_ultralytics_history(results_csv)
 
-    # Prepare history dict compatible with plot_training_history
     plot_hist = {
         'train_loss': history.get('train_loss') if history else [],
         'val_loss': history.get('val_loss') if history else [],
@@ -230,7 +207,6 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
         'val_acc': per_epoch_val_acc,
     }
 
-    # Save plot
     try:
         plot_training_history(plot_hist, save_path=config.OUTPUTS_PATH / 'plots' / 'yolo_curves.png', title='YOLO: Loss & Metric (Train vs Val)')
         logger.info(f"Saved combined training curves to {config.OUTPUTS_PATH / 'plots' / 'yolo_curves.png'}")
@@ -255,7 +231,6 @@ def main():
     config = Config()
     config.create_directories()
 
-    # Подготовка данных
     if args.prepare_data or args.all:
         logger.info("=" * 60)
         logger.info("Step 1: Preparing dataset...")
@@ -264,8 +239,7 @@ def main():
         converter = DatasetConverter(config)
         converter.build_yolo_dataset()
         dataset_info = converter.get_dataset_info()
-        
-        # Визуализируем распределение классов
+
         try:
             if dataset_info:
                 plot_class_distribution(
@@ -277,7 +251,6 @@ def main():
         except Exception as e:
             logger.warning(f"Could not save class distribution plot: {e}")
 
-    # Обучение модели
     if args.train or args.all:
         logger.info("\n" + "=" * 60)
         logger.info("Step 2: Training YOLO model...")
@@ -294,10 +267,8 @@ def main():
         logger.info("Training completed!")
         logger.info("=" * 60)
 
-        # Генерируем метрики и отчеты
         metrics = generate_metrics_report(config, results, detector=detector)
 
-        # Сохраняем модель
         model_path = config.OUTPUTS_PATH / "best_model.pt"
         detector.save_model(model_path)
 

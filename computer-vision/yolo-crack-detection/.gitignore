@@ -34,9 +34,7 @@ env/
 *~
 
 # Project specific
-data/raw/
-data/videos/
-data/dataset/
+data/
 outputs/
 results/
 *.mp4

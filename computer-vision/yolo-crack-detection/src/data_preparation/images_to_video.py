@@ -1,11 +1,9 @@
-import os
-import sys
+import argparse
 import logging
+import sys
 from pathlib import Path
 import cv2
-import numpy as np
 from tqdm import tqdm
-import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +14,6 @@ except ImportError as e:
     sys.exit(1)
 
 class ImagesToVideoConverter:
-    """Конвертирует последовательность изображений в видеофайл"""
-
     def __init__(self, config=None):
         self.config = config or Config()
         self.fps = self.config.VIDEO_FPS
@@ -29,7 +25,6 @@ class ImagesToVideoConverter:
         self.codec_name = 'MJPG'
 
     def create_video_from_deepcrack(self, output_path=None):
-        """Создаёт видео из DeepCrack датасета (трещины)"""
         if output_path is None:
             output_path = self.config.GENERATED_VIDEOS_PATH / "deepcrack_cracked.mp4"
 
@@ -39,7 +34,6 @@ class ImagesToVideoConverter:
         return self._create_video_from_directory(rgb_dir, output_path, label='crack')
 
     def create_video_from_sdnet_cracked(self, output_path=None):
-        """Создаёт видео из SDNET датасета (трещины)"""
         if output_path is None:
             output_path = self.config.GENERATED_VIDEOS_PATH / "sdnet_cracked.mp4"
 
@@ -56,7 +50,6 @@ class ImagesToVideoConverter:
         return self._create_video_from_list(all_images, output_path, label='crack')
 
     def create_video_from_sdnet_non_cracked(self, output_path=None):
-        """Создаёт видео из SDNET датасета (без трещин)"""
         if output_path is None:
             output_path = self.config.GENERATED_VIDEOS_PATH / "sdnet_non_cracked.mp4"
 
@@ -73,7 +66,6 @@ class ImagesToVideoConverter:
         return self._create_video_from_list(all_images, output_path, label='no_crack')
 
     def _get_images_from_dir(self, directory):
-        """Получает список изображений из директории"""
         exts = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.PNG']
         images = []
         for ext in exts:
@@ -81,12 +73,10 @@ class ImagesToVideoConverter:
         return sorted(images)
 
     def _create_video_from_directory(self, directory, output_path, label=None):
-        """Создаёт видео из всех изображений в директории"""
         images = self._get_images_from_dir(directory)
         return self._create_video_from_list(images, output_path, label)
 
     def _create_video_from_list(self, image_paths, output_path, label=None):
-        """Создаёт видео из списка путей изображений"""
         if not image_paths:
             logger.warning(f"No images found for {output_path}")
             return None
@@ -116,10 +106,8 @@ class ImagesToVideoConverter:
                     logger.warning(f"Failed to read: {img_path}")
                     continue
 
-                # Ресайзим изображение
                 frame = cv2.resize(frame, (self.width, self.height))
 
-                # Добавляем лейбл если нужен
                 if label:
                     cv2.putText(
                         frame,
@@ -145,7 +133,6 @@ class ImagesToVideoConverter:
         return output_path
 
     def create_all_videos(self):
-        """Создаёт все видео для датасета"""
         logger.info("Creating all dataset videos...")
 
         videos = {
