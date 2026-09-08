@@ -1,11 +1,12 @@
 import sys
-import logging
 import argparse
 import json
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 from src.utils.config import Config
 from src.data_preparation.dataset_converter import DatasetConverter
@@ -26,7 +27,7 @@ def generate_metrics_report(config, results, detector=None):
         with open(metrics_file, 'w') as f:
             json.dump(metrics, f, indent=2)
 
-        logger.info(f"✓ Metrics saved to {metrics_file}")
+        logger.info(f"Metrics saved to {metrics_file}")
 
         report_file = config.OUTPUTS_PATH / "training_report.txt"
         with open(report_file, 'w') as f:
@@ -42,7 +43,7 @@ def generate_metrics_report(config, results, detector=None):
             f.write(f"  Learning Rate: {config.LR}\n")
             f.write(f"  Device: {config.DEVICE}\n")
 
-        logger.info(f"✓ Training report saved to {report_file}")
+        logger.info(f"Training report saved to {report_file}")
         try:
             from src.utils.metrics import classification_metrics
             import cv2
@@ -214,11 +215,6 @@ def evaluate_weights_over_epochs(config: Config, detector: YOLOCrackDetector, tr
         logger.warning(f"Could not plot combined training curves: {e}")
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    )
-
     parser = argparse.ArgumentParser(description='Train YOLO crack detection model')
     parser.add_argument('--prepare-data', action='store_true', help='Prepare dataset')
     parser.add_argument('--train', action='store_true', help='Train model')
@@ -247,7 +243,7 @@ def main():
                     save_path=config.OUTPUTS_PATH / "class_distribution.png",
                     title="Dataset Class Distribution"
                 )
-                logger.info("✓ Class distribution plot saved")
+                logger.info("Class distribution plot saved")
         except Exception as e:
             logger.warning(f"Could not save class distribution plot: {e}")
 
@@ -272,16 +268,21 @@ def main():
         model_path = config.OUTPUTS_PATH / "best_model.pt"
         detector.save_model(model_path)
 
-        logger.info(f"✓ Model saved to: {model_path}")
-        logger.info(f"✓ All outputs saved to: {config.OUTPUTS_PATH}")
+        logger.info(f"Model saved to: {model_path}")
+        logger.info(f"All outputs saved to: {config.OUTPUTS_PATH}")
         logger.info("\n Generated files:")
-        logger.info(f"  • best_model.pt (trained weights)")
-        logger.info(f"  • metrics.json (performance metrics)")
-        logger.info(f"  • training_report.txt (human-readable report)")
+        logger.info(f"  - best_model.pt (trained weights)")
+        logger.info(f"  - metrics.json (performance metrics)")
+        logger.info(f"  - training_report.txt (human-readable report)")
         if (config.OUTPUTS_PATH / "class_distribution.png").exists():
-            logger.info(f"  • class_distribution.png")
+            logger.info(f"  - class_distribution.png")
 
 if __name__ == "__main__":
-    main()
+    from src.utils.logging_setup import shutdown_logging
+
+    try:
+        main()
+    finally:
+        shutdown_logging()
 
 

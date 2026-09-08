@@ -1,21 +1,21 @@
 import argparse
 import json
-import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
+from src.utils.logging_setup import get_logger, shutdown_logging
 from src.utils.config import Config
 from src.data_preparation.dataset_converter import DatasetConverter
 from src.models.yolo_crack_detector import YOLOCrackDetector
 from src.utils.visualizer import plot_class_distribution
 from train import generate_metrics_report
 
+logger = get_logger(__name__)
+
 
 def _build_run_config(args):
-    config = Config()
+    config = Config(config_path=args.config)
 
     if args.device:
         config.DEVICE = args.device
@@ -79,8 +79,10 @@ def _write_run_manifest(config, run_name, args, metrics=None, training_dir=None)
         'device': config.DEVICE,
         'dataset_root': str(config.DATASET_ROOT),
         'outputs_path': str(config.OUTPUTS_PATH),
+        'config_path': str(config.config_path),
         'training_dir': str(training_dir) if training_dir else None,
         'args': {
+            'config': args.config,
             'epochs': args.epochs,
             'batch_size': args.batch_size,
             'imgsz': args.imgsz,
@@ -98,12 +100,13 @@ def _write_run_manifest(config, run_name, args, metrics=None, training_dir=None)
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    )
-
     parser = argparse.ArgumentParser(description='Run the full YOLO crack detection pipeline')
+    parser.add_argument(
+        '--config',
+        type=str,
+        default=None,
+        help='Path to YAML configuration file (default: configs/train_config.yaml)',
+    )
     parser.add_argument('--epochs', type=int, default=None, help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=None, help='Batch size')
     parser.add_argument('--imgsz', type=int, default=None, help='Training image size')
@@ -112,10 +115,28 @@ def main():
     parser.add_argument('--run-name', type=str, default=None, help='Optional custom run folder name')
     parser.add_argument('--skip-prepare-data', action='store_true', help='Skip dataset preparation')
     parser.add_argument('--skip-train', action='store_true', help='Skip model training')
+    parser.add_argument(
+        '--smoke-test',
+        action='store_true',
+        help='Create a small synthetic dataset and run a quick local training test',
+    )
     args = parser.parse_args()
 
     config, run_name, _timestamp = _build_run_config(args)
     logger.info(f'Run folder: {config.OUTPUTS_PATH}')
+
+    if args.smoke_test:
+        from scripts.create_smoke_dataset import create_dataset
+
+        logger.info('Smoke test enabled. Creating a synthetic dataset.')
+        create_dataset(
+            config.DATASET_ROOT,
+            train_count=8,
+            val_count=4,
+            size=config.IMGSZ,
+            seed=config.RANDOM_SEED,
+        )
+        args.skip_prepare_data = True
 
     _write_run_manifest(config, run_name, args)
 
@@ -135,7 +156,7 @@ def main():
                     save_path=config.OUTPUTS_PATH / 'class_distribution.png',
                     title='Dataset Class Distribution'
                 )
-                logger.info('✓ Class distribution plot saved')
+                logger.info('Class distribution plot saved')
         except Exception as e:
             logger.warning(f'Could not save class distribution plot: {e}')
 
@@ -162,31 +183,33 @@ def main():
         best_pt = training_dir / 'weights' / 'best.pt'
         if best_pt.exists():
             shutil.copy2(best_pt, config.OUTPUTS_PATH / 'best_model.pt')
-            logger.info(f'✓ Best model copied to: {config.OUTPUTS_PATH / "best_model.pt"}')
+            logger.info(f'Best model copied to: {config.OUTPUTS_PATH / "best_model.pt"}')
 
-    # Fallback: if best.pt wasn't found, still save the in-memory model
     if not (config.OUTPUTS_PATH / 'best_model.pt').exists():
         try:
             detector.save_model(config.OUTPUTS_PATH / 'best_model.pt')
-            logger.info(f'✓ Model saved to: {config.OUTPUTS_PATH / "best_model.pt"}')
+            logger.info(f'Model saved to: {config.OUTPUTS_PATH / "best_model.pt"}')
         except Exception as e:
             logger.warning(f'Could not save model directly: {e}')
 
     _write_run_manifest(config, run_name, args, metrics=metrics, training_dir=training_dir)
 
-    logger.info(f'✓ All outputs saved to: {config.OUTPUTS_PATH}')
-    logger.info('✓ Generated files:')
-    logger.info('  • best_model.pt')
-    logger.info('  • metrics.json')
-    logger.info('  • classification_metrics.json')
-    logger.info('  • training_report.txt')
-    logger.info('  • training_metrics.png')
-    logger.info('  • run_manifest.json')
+    logger.info(f'All outputs saved to: {config.OUTPUTS_PATH}')
+    logger.info('Generated files:')
+    logger.info('  - best_model.pt')
+    logger.info('  - metrics.json')
+    logger.info('  - classification_metrics.json')
+    logger.info('  - training_report.txt')
+    logger.info('  - training_metrics.png')
+    logger.info('  - run_manifest.json')
     if (config.OUTPUTS_PATH / 'class_distribution.png').exists():
-        logger.info('  • class_distribution.png')
+        logger.info('  - class_distribution.png')
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        shutdown_logging()
 
 

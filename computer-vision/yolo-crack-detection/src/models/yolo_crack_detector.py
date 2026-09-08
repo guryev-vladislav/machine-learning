@@ -1,8 +1,8 @@
-import sys
-import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 from src.utils.config import Config
 
@@ -18,6 +18,7 @@ class YOLOCrackDetector:
         if self.model is None:
             try:
                 from ultralytics import YOLO
+                from ultralytics.utils.downloads import attempt_download_asset
                 if self.model_path and Path(self.model_path).exists():
                     model_src = Path(self.model_path)
                     logger.info(f"Loading model from {model_src}")
@@ -31,8 +32,12 @@ class YOLOCrackDetector:
                     cfg_path = Path(cfg_model)
                     if not cfg_path.is_absolute():
                         cfg_path = Path(self.config.PROJECT_PATH) / cfg_path
-                    pretrained_dir = Path(self.config.PROJECT_PATH) / 'src' / 'models' / 'pretrained'
-                    pretrained_candidate = pretrained_dir / Path(cfg_model).name
+                    model_name = Path(cfg_model).name
+                    if Path(model_name).suffix == '':
+                        model_name = f'{model_name}.pt'
+                    pretrained_dir = Path(self.config.PRETRAINED_MODELS_PATH)
+                    pretrained_dir.mkdir(parents=True, exist_ok=True)
+                    pretrained_candidate = pretrained_dir / model_name
 
                     if cfg_path.exists():
                         logger.info(f"Loading model from config path: {cfg_path}")
@@ -45,7 +50,13 @@ class YOLOCrackDetector:
                         self.model.to(self.device)
                         return
 
-                logger.info(f"Loading pretrained model: {self.config.MODEL_NAME}")
+                    logger.info(f"Downloading pretrained model to: {pretrained_candidate}")
+                    model_path = attempt_download_asset(pretrained_candidate)
+                    self.model = YOLO(model_path)
+                    self.model.to(self.device)
+                    return
+
+                logger.info(f"Loading model: {self.config.MODEL_NAME}")
                 self.model = YOLO(self.config.MODEL_NAME)
                 self.model.to(self.device)
             except ImportError as e:
@@ -56,8 +67,8 @@ class YOLOCrackDetector:
         self._init_model()
 
         dataset_root = dataset_root or self.config.DATASET_ROOT
-        epochs = epochs or self.config.EPOCHS
-        batch_size = batch_size or self.config.BATCH_SIZE
+        epochs = self.config.EPOCHS if epochs is None else epochs
+        batch_size = self.config.BATCH_SIZE if batch_size is None else batch_size
 
         logger.info(f"Starting training...")
         logger.info(f"  Dataset root: {dataset_root}")
@@ -86,7 +97,7 @@ class YOLOCrackDetector:
     def predict(self, source, conf=None):
         self._init_model()
 
-        conf = conf or self.conf_threshold
+        conf = self.conf_threshold if conf is None else conf
 
         logger.info(f"Running inference on: {source}")
         results = self.model.predict(
@@ -109,9 +120,21 @@ class YOLOCrackDetector:
 
         top_name = None
         top_conf = 0.0
+        class_probabilities = {}
 
         probs = getattr(result, 'probs', None)
         if probs is not None:
+            try:
+                probabilities = probs.data
+                if hasattr(probabilities, 'detach'):
+                    probabilities = probabilities.detach().cpu().numpy()
+                class_probabilities = {
+                    result.names[index]: float(probability)
+                    for index, probability in enumerate(probabilities.ravel())
+                }
+            except Exception:
+                class_probabilities = {}
+
             if hasattr(probs, 'top1'):
                 try:
                     top_idx = int(probs.top1)
@@ -160,10 +183,16 @@ class YOLOCrackDetector:
             except Exception:
                 top_name = 'unknown'
 
+        crack_probability = class_probabilities.get('crack')
+        if crack_probability is None:
+            crack_probability = top_conf if top_name == 'crack' else 1.0 - top_conf
+
         return {
             'class': top_name,
             'confidence': top_conf,
-            'is_crack': top_name == 'crack'
+            'is_crack': top_name == 'crack',
+            'predicted_label': int(top_name == 'crack'),
+            'crack_probability': float(crack_probability),
         }
 
     def save_model(self, path):
@@ -182,8 +211,12 @@ class YOLOCrackDetector:
             path = self.config.OUTPUTS_PATH / f"model.{format}"
 
         logger.info(f"Exporting model to {format}: {path}")
-        self.model.export(format=format, imgsz=self.config.IMGSZ)
+        exported_path = self.model.export(format=format, imgsz=self.config.IMGSZ)
+        if path is not None and exported_path is not None and Path(exported_path) != Path(path):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(exported_path).replace(path)
         logger.info(f"Model exported successfully!")
+        return Path(path)
 
 
 

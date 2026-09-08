@@ -1,60 +1,55 @@
 #!/bin/bash
 
-# YOLO Crack Detection - First Run Script
-# Этот скрипт поможет вам начать работу с проектом
+set -euo pipefail
 
-echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║     YOLO CRACK DETECTION - First Run Setup                    ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
+echo "YOLO Crack Detection"
+echo "Project setup"
+echo "===================="
 echo ""
 
-# Переходим в папку проекта
 cd "$(dirname "$0")" || exit 1
 
-echo "📦 Step 1: Checking dependencies..."
+echo "[1/3] Checking dependencies"
 if ! python3 -c "import torch" 2>/dev/null; then
-    echo "   ⚠️  PyTorch not found. Installing requirements..."
-    pip install -r requirements.txt
-    echo "   ✅ Dependencies installed"
+    echo "      PyTorch is not available. Installing requirements."
+    python3 -m pip install -r requirements.txt
+    echo "      Dependencies installed."
 else
-    echo "   ✅ Dependencies already installed"
+    echo "      PyTorch is already available."
 fi
 
 echo ""
-echo "📂 Step 2: Creating project directories..."
+echo "[2/3] Creating project directories"
 mkdir -p data/{raw,videos,dataset/{train/{crack,no_crack},val/{crack,no_crack}}} results outputs
-echo "   ✅ Directories created"
+echo "      Directories are ready."
 
 echo ""
-echo "🎯 Step 3: Project setup complete!"
+echo "[3/3] Setup complete"
 echo ""
-echo "═══════════════════════════════════════════════════════════════════"
+echo "Available commands"
+echo "------------------"
 echo ""
-echo "📖 Quick Start Commands:"
+echo "  Configuration: configs/train_config.yaml"
 echo ""
-echo "  1️⃣  Full Pipeline (everything in one):"
-echo "      python train.py --all"
+echo "  1. Full pipeline:"
+echo "      python main.py"
 echo ""
-echo "  2️⃣  Create videos from dataset images:"
-echo "      python main.py --create-video all"
+echo "  2. Prepare dataset:"
+echo "      python main.py --skip-train"
 echo ""
-echo "  3️⃣  Prepare dataset for training:"
-echo "      python train.py --prepare-data"
+echo "  3. Train model:"
+echo "      python main.py --epochs 50"
 echo ""
-echo "  4️⃣  Train YOLO model:"
-echo "      python train.py --train --epochs 50"
+echo "  4. Process video:"
+echo "      python -m src.inference.video_processor --video data/videos/input.mp4 --model outputs/<run>/best_model.pt --output outputs/result.mp4"
 echo ""
-echo "  5️⃣  Process video (detect cracks):"
-echo "      python main.py --video data/videos/deepcrack_cracked.mp4 --output results/output.mp4"
+echo "  5. Smoke test:"
+echo "      python main.py --config configs/quickstart.yaml --smoke-test --run-name quickstart"
 echo ""
-echo "═══════════════════════════════════════════════════════════════════"
+echo "Documentation"
+echo "-------------"
+echo "  README.md"
 echo ""
-echo "📚 Documentation:"
-echo "   • QUICKSTART_RU.md  - Быстрый старт (русский)"
-echo "   • README.md         - Overview"
-echo "   • USAGE_GUIDE.md    - Full documentation"
-echo "   • ARCHITECTURE.md   - Technical details"
-echo ""
-echo "✨ Ready to go! Start with: python train.py --all"
+echo "Start with: python main.py"
 echo ""
 

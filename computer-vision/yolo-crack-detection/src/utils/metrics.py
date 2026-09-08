@@ -1,9 +1,10 @@
-import logging
 from pathlib import Path
 import numpy as np
 from typing import Iterable
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 try:
     import matplotlib.pyplot as plt
@@ -40,18 +41,6 @@ def _load_sklearn_metrics():
 
 
 def classification_metrics(y_true, y_scores=None, y_pred=None, threshold=0.5, pos_label=1):
-    """Вычисляет основные метрики классификации для бинарной задачи.
-
-    Args:
-        y_true (array-like): истинные метки (0/1)
-        y_scores (array-like|None): вероятности (или логиты) для положительного класса
-        y_pred (array-like|None): предсказанные метки 0/1. Если не переданы, строятся из y_scores
-        threshold (float): порог для преобразования вероятностей в метки
-        pos_label: значение положительного класса (обычно 1)
-
-    Returns:
-        dict: словарь с метриками
-    """
     sklearn_metrics = _load_sklearn_metrics()
     if sklearn_metrics is None:
         raise ImportError('scikit-learn is required for classification_metrics')
@@ -72,7 +61,6 @@ def classification_metrics(y_true, y_scores=None, y_pred=None, threshold=0.5, po
         'f1': float(sklearn_metrics['f1_score'](y_true, y_pred, zero_division=0)),
     }
 
-    # ROC AUC — требуется как минимум один положительный и один отрицательный образец
     try:
         if y_scores is None:
             y_scores = y_pred
@@ -80,7 +68,6 @@ def classification_metrics(y_true, y_scores=None, y_pred=None, threshold=0.5, po
     except Exception:
         metrics['roc_auc'] = 0.0
 
-    # confusion matrix
     try:
         cm = sklearn_metrics['confusion_matrix'](y_true, y_pred)
         metrics['confusion_matrix'] = cm.tolist()
@@ -165,12 +152,6 @@ def save_metrics_report(metrics: dict, path):
 
 
 def calculate_segmentation_metrics(pred, target, threshold=0.5):
-    """Совместимая с concrete_crack_detection функция для расчёта IoU и Dice.
-
-    Повторяет поведение функции calculate_metrics из
-    ../concrete_crack_detection/src/utils/metrics.py — чтобы обеспечить
-    прямое сравнение метрик между проектами.
-    """
     try:
         import torch
     except Exception as e:

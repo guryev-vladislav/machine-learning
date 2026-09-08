@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Create a small quick dataset subset for fast experiments.
-Usage:
-    python scripts/create_quick_subset.py --src data/dataset --dst data/dataset_quick --train-per-class 200 --val-per-class 50
-"""
 import argparse
 from pathlib import Path
 import random
@@ -22,13 +17,11 @@ dst = Path(args.dst)
 if not src.exists():
     raise SystemExit(f"Source dataset not found: {src}")
 
-# classes are subdirs under train
 train_src = src / 'train'
 val_src = src / 'val'
 if not train_src.exists() or not val_src.exists():
     raise SystemExit(f"Expected train/ and val/ under {src}")
 
-# recreate dst
 if dst.exists():
     print(f"Removing existing dst {dst}")
     shutil.rmtree(dst)
@@ -36,7 +29,6 @@ if dst.exists():
 for split in ['train', 'val']:
     (dst / split).mkdir(parents=True, exist_ok=True)
 
-# copy per class
 for cls_dir in train_src.iterdir():
     if not cls_dir.is_dir():
         continue

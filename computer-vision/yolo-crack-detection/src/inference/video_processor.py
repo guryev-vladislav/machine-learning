@@ -1,10 +1,11 @@
-import logging
 import sys
 from pathlib import Path
 import cv2
 from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_setup import get_logger, shutdown_logging
+
+logger = get_logger(__name__)
 
 try:
     from src.utils.config import Config
@@ -59,7 +60,8 @@ class VideoProcessor:
         logger.info(f"Video info: {width}x{height}, FPS: {fps}, Total frames: {total_frames}")
 
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out_fps = self.config.OUTPUT_VIDEO_FPS or fps
+        source_fps = fps if fps > 0 else 1.0
+        out_fps = self.config.OUTPUT_VIDEO_FPS or source_fps
         writer = cv2.VideoWriter(
             str(output_path),
             fourcc,
@@ -78,44 +80,45 @@ class VideoProcessor:
 
         pbar = tqdm(total=total_frames, desc="Processing frames", leave=False)
 
-        while True:
-            ret, frame = cap.read()
+        try:
+            while True:
+                ret, frame = cap.read()
 
-            if not ret:
-                break
+                if not ret:
+                    break
 
-            frame_count += 1
+                frame_count += 1
+                result = self.detector.classify_frame(frame)
 
-            result = self.detector.classify_frame(frame)
+                if result:
+                    is_crack = result['is_crack']
+                    confidence = result['confidence']
 
-            if result:
-                is_crack = result['is_crack']
-                confidence = result['confidence']
+                    if is_crack:
+                        crack_frames.append(frame_count)
+                    else:
+                        no_crack_frames.append(frame_count)
 
-                if is_crack:
-                    crack_frames.append(frame_count)
-                else:
-                    no_crack_frames.append(frame_count)
+                    if draw_results:
+                        frame = self._draw_result(
+                            frame,
+                            is_crack=is_crack,
+                            confidence=confidence
+                        )
 
-                if draw_results:
-                    frame = self._draw_result(
-                        frame,
-                        is_crack=is_crack,
-                        confidence=confidence
-                    )
-
-            writer.write(frame)
-            pbar.update(1)
-
-        pbar.close()
-        cap.release()
-        writer.release()
+                writer.write(frame)
+                pbar.update(1)
+        finally:
+            pbar.close()
+            cap.release()
+            writer.release()
 
         logger.info(f"Video processing completed!")
         logger.info(f"  Total frames: {frame_count}")
         logger.info(f"  Frames with cracks: {len(crack_frames)}")
         logger.info(f"  Frames without cracks: {len(no_crack_frames)}")
-        logger.info(f"  Crack ratio: {len(crack_frames) / frame_count * 100:.1f}%")
+        crack_ratio = len(crack_frames) / frame_count * 100 if frame_count else 0.0
+        logger.info(f"  Crack ratio: {crack_ratio:.1f}%")
 
         self._save_report(
             output_path,
@@ -147,7 +150,9 @@ class VideoProcessor:
         return frame
 
     def _save_report(self, video_path, total_frames, crack_frames, no_crack_frames, fps):
-        report_path = Path(str(video_path).replace('.mp4', '_report.txt'))
+        video_path = Path(video_path)
+        report_path = video_path.with_name(f'{video_path.stem}_report.txt')
+        safe_fps = fps if fps > 0 else 1.0
 
         with open(report_path, 'w') as f:
             f.write(f"Video Processing Report\n")
@@ -155,17 +160,18 @@ class VideoProcessor:
             f.write(f"Video: {video_path.name}\n")
             f.write(f"Total frames: {total_frames}\n")
             f.write(f"FPS: {fps}\n")
-            f.write(f"Duration: {total_frames / fps:.2f} seconds\n\n")
+            f.write(f"Duration: {total_frames / safe_fps:.2f} seconds\n\n")
 
             f.write(f"Detection Results:\n")
             f.write(f"  Crack frames: {len(crack_frames)}\n")
             f.write(f"  No-crack frames: {len(no_crack_frames)}\n")
-            f.write(f"  Crack ratio: {len(crack_frames) / total_frames * 100:.1f}%\n\n")
+            crack_ratio = len(crack_frames) / total_frames * 100 if total_frames else 0.0
+            f.write(f"  Crack ratio: {crack_ratio:.1f}%\n\n")
 
             if crack_frames:
                 f.write(f"Frames with cracks (first 100):\n")
                 for frame_num in crack_frames[:100]:
-                    f.write(f"  Frame {frame_num} (time: {frame_num / fps:.2f}s)\n")
+                    f.write(f"  Frame {frame_num} (time: {frame_num / safe_fps:.2f}s)\n")
                 if len(crack_frames) > 100:
                     f.write(f"  ... and {len(crack_frames) - 100} more\n")
 
@@ -173,11 +179,6 @@ class VideoProcessor:
 
 def main():
     import argparse
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    )
 
     parser = argparse.ArgumentParser(description='Process video and detect cracks')
     parser.add_argument('--video', type=str, required=True, help='Path to video file')
@@ -197,10 +198,13 @@ def main():
     )
 
     if result_path:
-        logger.info(f"✓ Processing complete! Result: {result_path}")
+        logger.info(f"Processing complete. Result: {result_path}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        shutdown_logging()
 
 
 

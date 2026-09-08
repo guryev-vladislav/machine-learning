@@ -1,10 +1,10 @@
 project:
-  name: "yolo_crack_detection"
+  name: "yolo_crack_detection_quickstart"
 
 paths:
   raw_videos: "data/raw"
   generated_videos: "data/videos"
-  dataset_root: "data/dataset"
+  dataset_root: "data/quickstart_dataset"
   deepcrack: "../concrete_crack_detection/data/external/deepcrack"
   sdnet: "../concrete_crack_detection/data/external/sdnet2018"
   outputs: "outputs"
@@ -26,12 +26,12 @@ dataset:
 
 training:
   device: "cpu"
-  epochs: 50
-  batch_size: 8
-  imgsz: 416
+  epochs: 1
+  batch_size: 2
+  imgsz: 224
   learning_rate: 0.001
-  patience: 10
-  workers: 4
+  patience: 1
+  workers: 0
   task: "classify"
   model: "yolov8n-cls"
 
@@ -40,5 +40,3 @@ inference:
   iou_threshold: 0.5
   draw_confident: true
   output_video_fps: 20
-
-

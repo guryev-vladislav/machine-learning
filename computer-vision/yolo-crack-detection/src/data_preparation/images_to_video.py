@@ -1,11 +1,12 @@
 import argparse
-import logging
 import sys
 from pathlib import Path
 import cv2
 from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_setup import get_logger, shutdown_logging
+
+logger = get_logger(__name__)
 
 try:
     from src.utils.config import Config
@@ -19,8 +20,7 @@ class ImagesToVideoConverter:
         self.fps = self.config.VIDEO_FPS
         self.width = self.config.VIDEO_WIDTH
         self.height = self.config.VIDEO_HEIGHT
-        
-        # Use MJPG codec - most reliable on Linux
+
         self.codec = cv2.VideoWriter_fourcc(*'MJPG')
         self.codec_name = 'MJPG'
 
@@ -144,16 +144,11 @@ class ImagesToVideoConverter:
         logger.info("All videos created successfully!")
         for name, path in videos.items():
             if path:
-                logger.info(f"  ✓ {name}: {path}")
+                logger.info(f"  - {name}: {path}")
 
         return videos
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    )
-
     parser = argparse.ArgumentParser(description='Convert images to video')
     parser.add_argument('--source', type=str, default='all',
                         choices=['deepcrack', 'sdnet_cracked', 'sdnet_non_cracked', 'all'])
@@ -180,7 +175,10 @@ def main():
         converter.create_video_from_sdnet_non_cracked(args.output)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        shutdown_logging()
 
 
 
