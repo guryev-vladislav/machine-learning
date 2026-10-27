@@ -1,0 +1,18 @@
+# Minimal dependencies for running tests only.
+# Does NOT include torch, ultralytics, or any heavy inference stack.
+
+# Core (used by our own modules)
+numpy==2.5.4
+opencv-python==5.0.0.93
+PyYAML==6.0.3
+
+# Visualization (used by visualizer and metrics plots)
+matplotlib==3.11.2
+seaborn==0.13.2
+
+# Classification metrics (used by our classification_metrics wrapper)
+scikit-learn==1.9.1
+
+# Test tooling
+pytest==9.1.1
+pytest-cov==7.1.0

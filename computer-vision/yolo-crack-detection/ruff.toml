@@ -1,0 +1,38 @@
+# Ruff configuration for yolo-crack-detection
+# https://docs.ruff.dev/configuration/
+
+target-version = "py38"
+line-length = 99
+
+[lint]
+# Enable a subset of the most common rules
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "C4",    # flake8-comprehensions
+]
+
+ignore = [
+    "B007",   # unused loop variable — existing code style
+    "E402",   # module level import not at top (logging_setup pattern)
+    "E501",   # line length is handled by formatter
+    "F841",   # unused variable — existing code
+    "UP006",  # allow non-standard annotations
+    "UP035",  # allow deprecated imports
+    "C408",   # dict() calls — style preference, not worth refactoring
+    "SIM105", # contextlib.suppress — existing code
+    "SIM108", # ternary operator — readability preference
+    "SIM115", # context manager for open — existing code
+]
+
+[lint.isort]
+known-first-party = ["src"]
+
+[format]
+quote-style = "single"
+indent-style = "space"

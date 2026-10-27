@@ -33,7 +33,7 @@ training:
   patience: 1
   workers: 0
   task: "classify"
-  model: "yolov8n-cls"
+  model: "yolo11n-cls"
 
 inference:
   confidence_threshold: 0.5

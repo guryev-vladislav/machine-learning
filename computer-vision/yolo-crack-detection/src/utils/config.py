@@ -1,16 +1,18 @@
 from pathlib import Path
+
 import yaml
 
 from src.utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
+
 class Config:
     def __init__(self, config_path=None):
         self.PROJECT_PATH = Path(__file__).resolve().parents[2]
 
         if config_path is None:
-            config_path = self.PROJECT_PATH / "configs" / "train_config.yaml"
+            config_path = self.PROJECT_PATH / 'configs' / 'train_config.yaml'
 
         if isinstance(config_path, str):
             config_path = Path(config_path)
@@ -22,7 +24,7 @@ class Config:
             with config_path.open('r', encoding='utf-8') as file:
                 self.config_dict = yaml.safe_load(file) or {}
         else:
-            logger.warning(f"Config not found at {config_path}, using defaults")
+            logger.warning(f'Config not found at {config_path}, using defaults')
 
         self._load_from_dict()
 
@@ -34,7 +36,9 @@ class Config:
 
         paths = cfg.get('paths', {})
         self.RAW_VIDEOS_PATH = self._resolve_path(paths.get('raw_videos', 'data/raw'))
-        self.GENERATED_VIDEOS_PATH = self._resolve_path(paths.get('generated_videos', 'data/videos'))
+        self.GENERATED_VIDEOS_PATH = self._resolve_path(
+            paths.get('generated_videos', 'data/videos')
+        )
         self.DATASET_ROOT = self._resolve_path(paths.get('dataset_root', 'data/dataset'))
         self.DEEPCRACK_PATH = self._resolve_path(paths.get('deepcrack', 'data/external/deepcrack'))
         self.SDNET_PATH = self._resolve_path(paths.get('sdnet', 'data/external/sdnet2018'))
@@ -70,7 +74,7 @@ class Config:
         self.PATIENCE = training.get('patience', 10)
         self.NUM_WORKERS = training.get('workers', 4)
         self.TASK = training.get('task', 'classify')
-        self.MODEL_NAME = training.get('model', 'yolov8n-cls')
+        self.MODEL_NAME = training.get('model', 'yolo11n-cls')
 
         inference = cfg.get('inference', {})
         self.CONF_THRESHOLD = inference.get('confidence_threshold', 0.5)
@@ -100,5 +104,4 @@ class Config:
             logger.debug(f'Created/checked directory: {directory}')
 
     def __repr__(self):
-        return f"<Config: {self.PROJECT_NAME}>"
-
+        return f'<Config: {self.PROJECT_NAME}>'

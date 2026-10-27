@@ -4,10 +4,10 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from src.utils.logging_setup import get_logger, shutdown_logging
-from src.utils.config import Config
 from src.data_preparation.dataset_converter import DatasetConverter
 from src.models.yolo_crack_detector import YOLOCrackDetector
+from src.utils.config import Config
+from src.utils.logging_setup import get_logger, shutdown_logging
 from src.utils.visualizer import plot_class_distribution
 from train import generate_metrics_report
 
@@ -110,10 +110,18 @@ def main():
     parser.add_argument('--epochs', type=int, default=None, help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=None, help='Batch size')
     parser.add_argument('--imgsz', type=int, default=None, help='Training image size')
-    parser.add_argument('--device', type=str, default=None, help='Training device, e.g. cpu or cuda:0')
-    parser.add_argument('--dataset-root', type=str, default=None, help='Override dataset root path')
-    parser.add_argument('--run-name', type=str, default=None, help='Optional custom run folder name')
-    parser.add_argument('--skip-prepare-data', action='store_true', help='Skip dataset preparation')
+    parser.add_argument(
+        '--device', type=str, default=None, help='Training device, e.g. cpu or cuda:0'
+    )
+    parser.add_argument(
+        '--dataset-root', type=str, default=None, help='Override dataset root path'
+    )
+    parser.add_argument(
+        '--run-name', type=str, default=None, help='Optional custom run folder name'
+    )
+    parser.add_argument(
+        '--skip-prepare-data', action='store_true', help='Skip dataset preparation'
+    )
     parser.add_argument('--skip-train', action='store_true', help='Skip model training')
     parser.add_argument(
         '--smoke-test',
@@ -154,7 +162,7 @@ def main():
                 plot_class_distribution(
                     dataset_info,
                     save_path=config.OUTPUTS_PATH / 'class_distribution.png',
-                    title='Dataset Class Distribution'
+                    title='Dataset Class Distribution',
                 )
                 logger.info('Class distribution plot saved')
         except Exception as e:
@@ -169,7 +177,9 @@ def main():
     logger.info('=' * 60)
 
     detector = YOLOCrackDetector(config=config)
-    results = detector.train(dataset_root=config.DATASET_ROOT, epochs=config.EPOCHS, batch_size=config.BATCH_SIZE)
+    results = detector.train(
+        dataset_root=config.DATASET_ROOT, epochs=config.EPOCHS, batch_size=config.BATCH_SIZE
+    )
 
     logger.info('\n' + '=' * 60)
     logger.info('Training completed!')
@@ -211,5 +221,3 @@ if __name__ == '__main__':
         main()
     finally:
         shutdown_logging()
-
-

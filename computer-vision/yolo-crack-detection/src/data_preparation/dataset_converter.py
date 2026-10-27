@@ -1,7 +1,8 @@
+import random
+import shutil
 import sys
 from pathlib import Path
-import shutil
-import random
+
 from tqdm import tqdm
 
 from src.utils.logging_setup import get_logger, shutdown_logging
@@ -11,8 +12,9 @@ logger = get_logger(__name__)
 try:
     from src.utils.config import Config
 except ImportError as e:
-    logger.error(f"Critical import error: {e}")
+    logger.error(f'Critical import error: {e}')
     sys.exit(1)
+
 
 class DatasetConverter:
     def __init__(self, config=None):
@@ -20,37 +22,37 @@ class DatasetConverter:
         self.random = random.Random(self.config.RANDOM_SEED)
 
     def build_yolo_dataset(self):
-        logger.info("Building YOLO classification dataset...")
+        logger.info('Building YOLO classification dataset...')
 
         self.config.create_directories()
         crack_images = []
         non_crack_images = []
 
-        logger.info("Collecting DeepCrack images (crack)...")
-        rgb_dir = self.config.DEEPCRACK_PATH / "rgb"
+        logger.info('Collecting DeepCrack images (crack)...')
+        rgb_dir = self.config.DEEPCRACK_PATH / 'rgb'
         if rgb_dir.exists():
             images = self._get_images_from_dir(rgb_dir)
             crack_images.extend(images)
-            logger.info(f"  Found {len(images)} crack images")
+            logger.info(f'  Found {len(images)} crack images')
 
-        logger.info("Collecting SDNET cracked images...")
-        for category in ["Decks", "Pavements", "Walls"]:
-            cracked_dir = self.config.SDNET_PATH / category / "Cracked"
+        logger.info('Collecting SDNET cracked images...')
+        for category in ['Decks', 'Pavements', 'Walls']:
+            cracked_dir = self.config.SDNET_PATH / category / 'Cracked'
             if cracked_dir.exists():
                 images = self._get_images_from_dir(cracked_dir)
                 crack_images.extend(images)
-                logger.info(f"  Found {len(images)} crack images in {category}")
+                logger.info(f'  Found {len(images)} crack images in {category}')
 
-        logger.info("Collecting SDNET non-cracked images...")
-        for category in ["Decks", "Pavements", "Walls"]:
-            non_cracked_dir = self.config.SDNET_PATH / category / "Non-cracked"
+        logger.info('Collecting SDNET non-cracked images...')
+        for category in ['Decks', 'Pavements', 'Walls']:
+            non_cracked_dir = self.config.SDNET_PATH / category / 'Non-cracked'
             if non_cracked_dir.exists():
                 images = self._get_images_from_dir(non_cracked_dir)
                 non_crack_images.extend(images)
-                logger.info(f"  Found {len(images)} non-crack images in {category}")
+                logger.info(f'  Found {len(images)} non-crack images in {category}')
 
-        logger.info(f"\nTotal crack images: {len(crack_images)}")
-        logger.info(f"Total non-crack images: {len(non_crack_images)}")
+        logger.info(f'\nTotal crack images: {len(crack_images)}')
+        logger.info(f'Total non-crack images: {len(non_crack_images)}')
 
         min_count = min(len(crack_images), len(non_crack_images))
         if min_count == 0:
@@ -62,12 +64,12 @@ class DatasetConverter:
         crack_images = self.random.sample(crack_images, min_count)
         non_crack_images = self.random.sample(non_crack_images, min_count)
 
-        logger.info(f"Balanced dataset: {min_count} crack, {min_count} non-crack")
+        logger.info(f'Balanced dataset: {min_count} crack, {min_count} non-crack')
 
         self._split_and_copy(crack_images, 'crack')
         self._split_and_copy(non_crack_images, 'no_crack')
 
-        logger.info("YOLO dataset created successfully!")
+        logger.info('YOLO dataset created successfully!')
 
     def _get_images_from_dir(self, directory):
         exts = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.PNG']
@@ -77,7 +79,7 @@ class DatasetConverter:
         return images
 
     def _split_and_copy(self, image_paths, class_name):
-        logger.info(f"Processing class: {class_name}")
+        logger.info(f'Processing class: {class_name}')
 
         image_paths = list(image_paths)
         self.random.shuffle(image_paths)
@@ -90,44 +92,45 @@ class DatasetConverter:
         train_dir.mkdir(parents=True, exist_ok=True)
         val_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"  Train: {len(train_images)} -> {train_dir}")
-        logger.info(f"  Val: {len(val_images)} -> {val_dir}")
+        logger.info(f'  Train: {len(train_images)} -> {train_dir}')
+        logger.info(f'  Val: {len(val_images)} -> {val_dir}')
 
-        for img_path in tqdm(train_images, desc=f"Train {class_name}", leave=False):
+        for img_path in tqdm(train_images, desc=f'Train {class_name}', leave=False):
             dest = train_dir / img_path.name
             if not dest.exists():
                 shutil.copy2(img_path, dest)
 
-        for img_path in tqdm(val_images, desc=f"Val {class_name}", leave=False):
+        for img_path in tqdm(val_images, desc=f'Val {class_name}', leave=False):
             dest = val_dir / img_path.name
             if not dest.exists():
                 shutil.copy2(img_path, dest)
 
     def get_dataset_info(self):
-        logger.info("\n=== YOLO Dataset Info ===")
+        logger.info('\n=== YOLO Dataset Info ===')
 
         train_crack = len(list((self.config.DATASET_ROOT / 'train' / 'crack').glob('*')))
         train_no_crack = len(list((self.config.DATASET_ROOT / 'train' / 'no_crack').glob('*')))
         val_crack = len(list((self.config.DATASET_ROOT / 'val' / 'crack').glob('*')))
         val_no_crack = len(list((self.config.DATASET_ROOT / 'val' / 'no_crack').glob('*')))
 
-        logger.info(f"Train set:")
-        logger.info(f"  Crack: {train_crack}")
-        logger.info(f"  No crack: {train_no_crack}")
-        logger.info(f"  Total: {train_crack + train_no_crack}")
+        logger.info('Train set:')
+        logger.info(f'  Crack: {train_crack}')
+        logger.info(f'  No crack: {train_no_crack}')
+        logger.info(f'  Total: {train_crack + train_no_crack}')
 
-        logger.info(f"Val set:")
-        logger.info(f"  Crack: {val_crack}")
-        logger.info(f"  No crack: {val_no_crack}")
-        logger.info(f"  Total: {val_crack + val_no_crack}")
+        logger.info('Val set:')
+        logger.info(f'  Crack: {val_crack}')
+        logger.info(f'  No crack: {val_no_crack}')
+        logger.info(f'  Total: {val_crack + val_no_crack}')
 
         total = train_crack + train_no_crack + val_crack + val_no_crack
-        logger.info(f"Total dataset size: {total}")
+        logger.info(f'Total dataset size: {total}')
         return {
             'train': {'crack': train_crack, 'no_crack': train_no_crack},
             'val': {'crack': val_crack, 'no_crack': val_no_crack},
             'total': total,
         }
+
 
 def main():
     config = Config()
@@ -135,9 +138,9 @@ def main():
     converter.build_yolo_dataset()
     converter.get_dataset_info()
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     try:
         main()
     finally:
         shutdown_logging()
-

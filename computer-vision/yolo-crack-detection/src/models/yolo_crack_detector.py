@@ -6,6 +6,7 @@ logger = get_logger(__name__)
 
 from src.utils.config import Config
 
+
 class YOLOCrackDetector:
     def __init__(self, config=None, model_path=None):
         self.config = config or Config()
@@ -19,9 +20,10 @@ class YOLOCrackDetector:
             try:
                 from ultralytics import YOLO
                 from ultralytics.utils.downloads import attempt_download_asset
+
                 if self.model_path and Path(self.model_path).exists():
                     model_src = Path(self.model_path)
-                    logger.info(f"Loading model from {model_src}")
+                    logger.info(f'Loading model from {model_src}')
                     self.model = YOLO(str(model_src))
                     self.model.to(self.device)
                     return
@@ -40,27 +42,27 @@ class YOLOCrackDetector:
                     pretrained_candidate = pretrained_dir / model_name
 
                     if cfg_path.exists():
-                        logger.info(f"Loading model from config path: {cfg_path}")
+                        logger.info(f'Loading model from config path: {cfg_path}')
                         self.model = YOLO(str(cfg_path))
                         self.model.to(self.device)
                         return
                     elif pretrained_candidate.exists():
-                        logger.info(f"Loading model from pretrained dir: {pretrained_candidate}")
+                        logger.info(f'Loading model from pretrained dir: {pretrained_candidate}')
                         self.model = YOLO(str(pretrained_candidate))
                         self.model.to(self.device)
                         return
 
-                    logger.info(f"Downloading pretrained model to: {pretrained_candidate}")
+                    logger.info(f'Downloading pretrained model to: {pretrained_candidate}')
                     model_path = attempt_download_asset(pretrained_candidate)
                     self.model = YOLO(model_path)
                     self.model.to(self.device)
                     return
 
-                logger.info(f"Loading model: {self.config.MODEL_NAME}")
+                logger.info(f'Loading model: {self.config.MODEL_NAME}')
                 self.model = YOLO(self.config.MODEL_NAME)
                 self.model.to(self.device)
             except ImportError as e:
-                logger.error(f"Failed to load ultralytics: {e}")
+                logger.error(f'Failed to load ultralytics: {e}')
                 raise
 
     def train(self, dataset_root=None, epochs=None, batch_size=None, save_period: int = 0):
@@ -70,10 +72,10 @@ class YOLOCrackDetector:
         epochs = self.config.EPOCHS if epochs is None else epochs
         batch_size = self.config.BATCH_SIZE if batch_size is None else batch_size
 
-        logger.info(f"Starting training...")
-        logger.info(f"  Dataset root: {dataset_root}")
-        logger.info(f"  Epochs: {epochs}")
-        logger.info(f"  Batch size: {batch_size}")
+        logger.info('Starting training...')
+        logger.info(f'  Dataset root: {dataset_root}')
+        logger.info(f'  Epochs: {epochs}')
+        logger.info(f'  Batch size: {batch_size}')
 
         train_kwargs = dict(
             data=str(dataset_root),
@@ -91,7 +93,7 @@ class YOLOCrackDetector:
 
         results = self.model.train(**train_kwargs)
 
-        logger.info("Training completed!")
+        logger.info('Training completed!')
         return results
 
     def predict(self, source, conf=None):
@@ -99,13 +101,8 @@ class YOLOCrackDetector:
 
         conf = self.conf_threshold if conf is None else conf
 
-        logger.info(f"Running inference on: {source}")
-        results = self.model.predict(
-            source=source,
-            conf=conf,
-            device=self.device,
-            verbose=False
-        )
+        logger.info(f'Running inference on: {source}')
+        results = self.model.predict(source=source, conf=conf, device=self.device, verbose=False)
 
         return results
 
@@ -201,28 +198,19 @@ class YOLOCrackDetector:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Saving model to {path}")
+        logger.info(f'Saving model to {path}')
         self.model.save(str(path))
 
     def export_model(self, format='onnx', path=None):
         self._init_model()
 
         if path is None:
-            path = self.config.OUTPUTS_PATH / f"model.{format}"
+            path = self.config.OUTPUTS_PATH / f'model.{format}'
 
-        logger.info(f"Exporting model to {format}: {path}")
+        logger.info(f'Exporting model to {format}: {path}')
         exported_path = self.model.export(format=format, imgsz=self.config.IMGSZ)
         if path is not None and exported_path is not None and Path(exported_path) != Path(path):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             Path(exported_path).replace(path)
-        logger.info(f"Model exported successfully!")
+        logger.info('Model exported successfully!')
         return Path(path)
-
-
-
-
-
-
-
-
-

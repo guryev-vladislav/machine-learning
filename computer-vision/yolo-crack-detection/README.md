@@ -42,7 +42,7 @@ python main.py \
   --run-name quickstart
 ```
 
-The command creates a small synthetic dataset, trains `yolov8n-cls` for one epoch on CPU, and stores results under `outputs/quickstart_<timestamp>/`.
+The command creates a small synthetic dataset, trains `yolo11n-cls` for one epoch on CPU, and stores results under `outputs/quickstart_<timestamp>/`.
 
 ## Training
 

@@ -203,6 +203,10 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local task plans
+/PLAN.md
+/computer-vision/yolo-crack-detection/PLAN.md
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

@@ -31,7 +31,9 @@ class DatasetConverterTests(unittest.TestCase):
 
             self.assertEqual(len(train_files), 3)
             self.assertEqual(len(val_files), 1)
-            self.assertNotEqual([path.name for path in train_files], [path.name for path in image_paths[:3]])
+            self.assertNotEqual(
+                [path.name for path in train_files], [path.name for path in image_paths[:3]]
+            )
 
 
 if __name__ == '__main__':

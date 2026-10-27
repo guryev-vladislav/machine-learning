@@ -1,6 +1,6 @@
 from pathlib import Path
+
 import numpy as np
-from typing import Iterable
 
 from src.utils.logging_setup import get_logger
 
@@ -10,21 +10,22 @@ try:
     import matplotlib.pyplot as plt
     import seaborn as sns
 except Exception as e:
-    logger.error(f"Visualization dependencies missing: {e}")
+    logger.error(f'Visualization dependencies missing: {e}')
 
 
 def _load_sklearn_metrics():
     try:
         from sklearn.metrics import (
             accuracy_score,
+            confusion_matrix,
+            f1_score,
+            precision_recall_curve,
             precision_score,
             recall_score,
-            f1_score,
             roc_auc_score,
-            confusion_matrix,
             roc_curve,
-            precision_recall_curve,
         )
+
         return {
             'accuracy_score': accuracy_score,
             'precision_score': precision_score,
@@ -36,7 +37,7 @@ def _load_sklearn_metrics():
             'precision_recall_curve': precision_recall_curve,
         }
     except Exception as e:
-        logger.error(f"Metrics dependencies missing: {e}")
+        logger.error(f'Metrics dependencies missing: {e}')
         return None
 
 
@@ -79,7 +80,9 @@ def classification_metrics(y_true, y_scores=None, y_pred=None, threshold=0.5, po
 
 def plot_confusion_matrix(cm, class_names=('no_crack', 'crack'), save_path=None):
     plt.figure(figsize=(5, 4))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    sns.heatmap(
+        cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names
+    )
     plt.ylabel('True')
     plt.xlabel('Pred')
     plt.title('Confusion Matrix')
@@ -87,7 +90,7 @@ def plot_confusion_matrix(cm, class_names=('no_crack', 'crack'), save_path=None)
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight')
         plt.close()
-        logger.info(f"Saved confusion matrix to {save_path}")
+        logger.info(f'Saved confusion matrix to {save_path}')
     else:
         plt.show()
 
@@ -111,11 +114,11 @@ def plot_roc(y_true, y_scores, save_path=None):
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, bbox_inches='tight')
             plt.close()
-            logger.info(f"Saved ROC curve to {save_path}")
+            logger.info(f'Saved ROC curve to {save_path}')
         else:
             plt.show()
     except Exception as e:
-        logger.error(f"Failed to plot ROC: {e}")
+        logger.error(f'Failed to plot ROC: {e}')
 
 
 def plot_precision_recall(y_true, y_scores, save_path=None):
@@ -135,11 +138,11 @@ def plot_precision_recall(y_true, y_scores, save_path=None):
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, bbox_inches='tight')
             plt.close()
-            logger.info(f"Saved PR curve to {save_path}")
+            logger.info(f'Saved PR curve to {save_path}')
         else:
             plt.show()
     except Exception as e:
-        logger.error(f"Failed to plot PR curve: {e}")
+        logger.error(f'Failed to plot PR curve: {e}')
 
 
 def save_metrics_report(metrics: dict, path):
@@ -147,15 +150,15 @@ def save_metrics_report(metrics: dict, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
         for k, v in metrics.items():
-            f.write(f"{k}: {v}\n")
-    logger.info(f"Saved metrics report to {path}")
+            f.write(f'{k}: {v}\n')
+    logger.info(f'Saved metrics report to {path}')
 
 
 def calculate_segmentation_metrics(pred, target, threshold=0.5):
     try:
         import torch
     except Exception as e:
-        logger.error(f"Torch is required for segmentation metrics: {e}")
+        logger.error(f'Torch is required for segmentation metrics: {e}')
         raise
 
     pred = (torch.sigmoid(pred) > threshold).float()
@@ -168,4 +171,3 @@ def calculate_segmentation_metrics(pred, target, threshold=0.5):
     dice = (2 * intersection + 1e-6) / (pred.sum() + target.sum() + 1e-6)
 
     return float(iou.item()), float(dice.item())
-

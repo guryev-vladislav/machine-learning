@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+
 import numpy as np
 
 from src.utils.logging_setup import get_logger
@@ -8,17 +9,16 @@ logger = get_logger(__name__)
 
 try:
     import cv2
-    import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-    import seaborn as sns
 except Exception as e:
-    logger.error(f"Visualization dependencies missing: {e}")
+    logger.error(f'Visualization dependencies missing: {e}')
 
 
-def plot_training_history(history, save_path=None, title="YOLOv8 Training History"):
+def plot_training_history(history, save_path=None, title='YOLOv8 Training History'):
     if not history:
-        logger.warning("No history data to plot")
+        logger.warning('No history data to plot')
         return
 
     fig = plt.figure(figsize=(14, 5))
@@ -37,7 +37,9 @@ def plot_training_history(history, save_path=None, title="YOLOv8 Training Histor
 
     ax2 = fig.add_subplot(gs[0, 1])
     if 'train_acc' in history:
-        ax2.plot(history['train_acc'], label='Train Accuracy', linewidth=2, marker='o', markersize=3)
+        ax2.plot(
+            history['train_acc'], label='Train Accuracy', linewidth=2, marker='o', markersize=3
+        )
     if 'val_acc' in history:
         ax2.plot(history['val_acc'], label='Val Accuracy', linewidth=2, marker='s', markersize=3)
     ax2.set_xlabel('Epoch', fontsize=12)
@@ -52,7 +54,7 @@ def plot_training_history(history, save_path=None, title="YOLOv8 Training Histor
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        logger.info(f"Saved training history plot to {save_path}")
+        logger.info(f'Saved training history plot to {save_path}')
         plt.close()
     else:
         plt.show()
@@ -60,7 +62,7 @@ def plot_training_history(history, save_path=None, title="YOLOv8 Training Histor
 
 def _safe_float(value):
     try:
-        if value is None or value == "":
+        if value is None or value == '':
             return None
         return float(value)
     except Exception:
@@ -69,7 +71,7 @@ def _safe_float(value):
 
 def _safe_int(value):
     try:
-        if value is None or value == "":
+        if value is None or value == '':
             return None
         return int(float(value))
     except Exception:
@@ -79,141 +81,159 @@ def _safe_int(value):
 def load_ultralytics_history(results_csv):
     results_csv = Path(results_csv)
     if not results_csv.exists():
-        logger.warning(f"results.csv not found: {results_csv}")
+        logger.warning(f'results.csv not found: {results_csv}')
         return None
 
-    with open(results_csv, "r", encoding="utf-8", newline="") as f:
+    with open(results_csv, encoding='utf-8', newline='') as f:
         reader = csv.DictReader(f)
-        rows = [row for row in reader if any((v or "").strip() for v in row.values())]
+        rows = [row for row in reader if any((v or '').strip() for v in row.values())]
 
     if not rows:
-        logger.warning(f"No rows found in results.csv: {results_csv}")
+        logger.warning(f'No rows found in results.csv: {results_csv}')
         return None
 
     history = {
-        "epochs": [],
-        "train_loss": [],
-        "val_loss": [],
-        "train_metric": [],
-        "val_metric": [],
-        "top1": [],
-        "top5": [],
+        'epochs': [],
+        'train_loss': [],
+        'val_loss': [],
+        'train_metric': [],
+        'val_metric': [],
+        'top1': [],
+        'top5': [],
     }
 
     def _get_first_present(row, keys):
         for k in keys:
-            if k in row and (row[k] is not None and str(row[k]).strip() != ""):
+            if k in row and (row[k] is not None and str(row[k]).strip() != ''):
                 return row[k]
         return None
 
     train_metric_keys = [
-        "metrics/accuracy_top1",
-        "train/metrics/accuracy_top1",
-        "train/accuracy",
-        "train_acc",
-        "metrics/top1",
-        "metrics/acc",
+        'metrics/accuracy_top1',
+        'train/metrics/accuracy_top1',
+        'train/accuracy',
+        'train_acc',
+        'metrics/top1',
+        'metrics/acc',
     ]
     val_metric_keys = [
-        "val/metrics/accuracy_top1",
-        "metrics/val_accuracy_top1",
-        "val/metrics/accuracy",
-        "val_accuracy",
-        "val_acc",
+        'val/metrics/accuracy_top1',
+        'metrics/val_accuracy_top1',
+        'val/metrics/accuracy',
+        'val_accuracy',
+        'val_acc',
     ]
 
     for row in rows:
-        epoch = _safe_int(row.get("epoch"))
+        epoch = _safe_int(row.get('epoch'))
         if epoch is not None:
-            history["epochs"].append(epoch)
+            history['epochs'].append(epoch)
 
-        train_loss = _safe_float(row.get("train/loss") or row.get("train_loss"))
+        train_loss = _safe_float(row.get('train/loss') or row.get('train_loss'))
         if train_loss is not None:
-            history["train_loss"].append(train_loss)
+            history['train_loss'].append(train_loss)
 
-        val_loss = _safe_float(row.get("val/loss") or row.get("val_loss"))
+        val_loss = _safe_float(row.get('val/loss') or row.get('val_loss'))
         if val_loss is not None:
-            history["val_loss"].append(val_loss)
+            history['val_loss'].append(val_loss)
 
         train_metric_val = _safe_float(_get_first_present(row, train_metric_keys))
         val_metric_val = _safe_float(_get_first_present(row, val_metric_keys))
 
         if train_metric_val is not None:
-            history["train_metric"].append(train_metric_val)
+            history['train_metric'].append(train_metric_val)
 
         if val_metric_val is not None:
-            history["val_metric"].append(val_metric_val)
+            history['val_metric'].append(val_metric_val)
 
-        top1 = _safe_float(row.get("metrics/accuracy_top1") or row.get("metrics/top1"))
+        top1 = _safe_float(row.get('metrics/accuracy_top1') or row.get('metrics/top1'))
         if top1 is not None:
-            history["top1"].append(top1)
+            history['top1'].append(top1)
             if train_metric_val is None:
-                history["train_metric"].append(top1)
+                history['train_metric'].append(top1)
 
-        top5 = _safe_float(row.get("metrics/accuracy_top5") or row.get("metrics/top5"))
+        top5 = _safe_float(row.get('metrics/accuracy_top5') or row.get('metrics/top5'))
         if top5 is not None:
-            history["top5"].append(top5)
+            history['top5'].append(top5)
 
     return history
 
 
-def plot_ultralytics_training_curves(results_csv, save_path=None, title="YOLO Training Curves"):
+def plot_ultralytics_training_curves(results_csv, save_path=None, title='YOLO Training Curves'):
     history = load_ultralytics_history(results_csv)
     if not history:
         return
 
-    epochs = history.get("epochs") or list(range(1, max(
-        len(history.get("train_loss", [])),
-        len(history.get("val_loss", [])),
-        len(history.get("train_metric", [])),
-        len(history.get("val_metric", [])),
-        len(history.get("top1", [])),
-        len(history.get("top5", [])),
-    ) + 1))
+    epochs = history.get('epochs') or list(
+        range(
+            1,
+            max(
+                len(history.get('train_loss', [])),
+                len(history.get('val_loss', [])),
+                len(history.get('train_metric', [])),
+                len(history.get('val_metric', [])),
+                len(history.get('top1', [])),
+                len(history.get('top5', [])),
+            )
+            + 1,
+        )
+    )
 
     fig = plt.figure(figsize=(14, 5))
     gs = GridSpec(1, 2, figure=fig)
 
     ax1 = fig.add_subplot(gs[0, 0])
-    if history.get("train_loss"):
-        ax1.plot(epochs[:len(history["train_loss"])], history["train_loss"], label="Train", linewidth=2)
-    if history.get("val_loss"):
-        ax1.plot(epochs[:len(history["val_loss"])], history["val_loss"], label="Val", linewidth=2)
-    ax1.set_xlabel("Epoch", fontsize=12)
-    ax1.set_ylabel("Loss", fontsize=12)
-    ax1.set_title("YOLO: Loss", fontsize=14, fontweight="bold")
+    if history.get('train_loss'):
+        ax1.plot(
+            epochs[: len(history['train_loss'])], history['train_loss'], label='Train', linewidth=2
+        )
+    if history.get('val_loss'):
+        ax1.plot(epochs[: len(history['val_loss'])], history['val_loss'], label='Val', linewidth=2)
+    ax1.set_xlabel('Epoch', fontsize=12)
+    ax1.set_ylabel('Loss', fontsize=12)
+    ax1.set_title('YOLO: Loss', fontsize=14, fontweight='bold')
     ax1.legend(fontsize=11)
     ax1.grid(True, alpha=0.3)
 
     ax2 = fig.add_subplot(gs[0, 1])
 
-    has_train_val_metric = bool(history.get("train_metric")) or bool(history.get("val_metric"))
+    has_train_val_metric = bool(history.get('train_metric')) or bool(history.get('val_metric'))
     if has_train_val_metric:
-        if history.get("train_metric"):
-            ax2.plot(epochs[:len(history["train_metric"])], history["train_metric"], label="Train", linewidth=2)
-        if history.get("val_metric"):
-            ax2.plot(epochs[:len(history["val_metric"])], history["val_metric"], label="Val", linewidth=2)
-        ax2.set_ylabel("Metric", fontsize=12)
-        ax2.set_title("YOLO: Metric (Train vs Val)", fontsize=14, fontweight="bold")
+        if history.get('train_metric'):
+            ax2.plot(
+                epochs[: len(history['train_metric'])],
+                history['train_metric'],
+                label='Train',
+                linewidth=2,
+            )
+        if history.get('val_metric'):
+            ax2.plot(
+                epochs[: len(history['val_metric'])],
+                history['val_metric'],
+                label='Val',
+                linewidth=2,
+            )
+        ax2.set_ylabel('Metric', fontsize=12)
+        ax2.set_title('YOLO: Metric (Train vs Val)', fontsize=14, fontweight='bold')
     else:
-        if history.get("top1"):
-            ax2.plot(epochs[:len(history["top1"])], history["top1"], label="Top-1", linewidth=2)
-        if history.get("top5"):
-            ax2.plot(epochs[:len(history["top5"])], history["top5"], label="Top-5", linewidth=2)
-        ax2.set_ylabel("Accuracy", fontsize=12)
-        ax2.set_title("YOLO: Metric", fontsize=14, fontweight="bold")
+        if history.get('top1'):
+            ax2.plot(epochs[: len(history['top1'])], history['top1'], label='Top-1', linewidth=2)
+        if history.get('top5'):
+            ax2.plot(epochs[: len(history['top5'])], history['top5'], label='Top-5', linewidth=2)
+        ax2.set_ylabel('Accuracy', fontsize=12)
+        ax2.set_title('YOLO: Metric', fontsize=14, fontweight='bold')
 
-    ax2.set_xlabel("Epoch", fontsize=12)
+    ax2.set_xlabel('Epoch', fontsize=12)
     ax2.legend(fontsize=11)
     ax2.grid(True, alpha=0.3)
 
-    plt.suptitle(title, fontsize=16, fontweight="bold")
+    plt.suptitle(title, fontsize=16, fontweight='bold')
     plt.tight_layout()
 
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        logger.info(f"Saved YOLO training curves to {save_path}")
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        logger.info(f'Saved YOLO training curves to {save_path}')
         plt.close()
     else:
         plt.show()
@@ -221,7 +241,7 @@ def plot_ultralytics_training_curves(results_csv, save_path=None, title="YOLO Tr
 
 def plot_model_comparison(models_data, save_path=None):
     if not models_data:
-        logger.warning("No models data to compare")
+        logger.warning('No models data to compare')
         return
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -238,8 +258,15 @@ def plot_model_comparison(models_data, save_path=None):
 
         for bar, value in zip(bars, values):
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{value:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f'{value:.3f}',
+                ha='center',
+                va='bottom',
+                fontsize=10,
+                fontweight='bold',
+            )
 
         ax.set_ylabel('Score', fontsize=12)
         ax.set_title(f'{metric.capitalize()}', fontsize=13, fontweight='bold')
@@ -253,7 +280,7 @@ def plot_model_comparison(models_data, save_path=None):
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        logger.info(f"Saved model comparison to {save_path}")
+        logger.info(f'Saved model comparison to {save_path}')
         plt.close()
     else:
         plt.show()
@@ -262,7 +289,7 @@ def plot_model_comparison(models_data, save_path=None):
 def plot_detection_results(image_path, detections, save_path=None, confidence_threshold=0.5):
     img = cv2.imread(str(image_path))
     if img is None:
-        logger.error(f"Failed to read image: {image_path}")
+        logger.error(f'Failed to read image: {image_path}')
         return
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -285,13 +312,21 @@ def plot_detection_results(image_path, detections, save_path=None, confidence_th
         x1, y1, x2, y2 = box
         color = colors.get(cls, 'blue')
 
-        rect = mpatches.Rectangle((x1, y1), x2 - x1, y2 - y1,
-                                   linewidth=2, edgecolor=color, facecolor='none')
+        rect = mpatches.Rectangle(
+            (x1, y1), x2 - x1, y2 - y1, linewidth=2, edgecolor=color, facecolor='none'
+        )
         ax.add_patch(rect)
 
-        label = f"{cls}: {conf:.2f}"
-        ax.text(x1, y1 - 5, label, fontsize=10, color=color, fontweight='bold',
-               bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+        label = f'{cls}: {conf:.2f}'
+        ax.text(
+            x1,
+            y1 - 5,
+            label,
+            fontsize=10,
+            color=color,
+            fontweight='bold',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.7),
+        )
 
     ax.set_title(f'Detection Results: {Path(image_path).stem}', fontsize=14, fontweight='bold')
     ax.axis('off')
@@ -300,15 +335,15 @@ def plot_detection_results(image_path, detections, save_path=None, confidence_th
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        logger.info(f"Saved detection results to {save_path}")
+        logger.info(f'Saved detection results to {save_path}')
         plt.close()
     else:
         plt.show()
 
 
-def plot_class_distribution(class_counts, save_path=None, title="Class Distribution"):
+def plot_class_distribution(class_counts, save_path=None, title='Class Distribution'):
     if not class_counts:
-        logger.warning("No class data to plot")
+        logger.warning('No class data to plot')
         return
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -320,15 +355,28 @@ def plot_class_distribution(class_counts, save_path=None, title="Class Distribut
     bars = axes[0].bar(classes, counts, color=colors, alpha=0.8, edgecolor='black', linewidth=2)
     for bar, count in zip(bars, counts):
         height = bar.get_height()
-        axes[0].text(bar.get_x() + bar.get_width()/2., height,
-                    f'{int(count)}', ha='center', va='bottom', fontsize=12, fontweight='bold')
+        axes[0].text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height,
+            f'{int(count)}',
+            ha='center',
+            va='bottom',
+            fontsize=12,
+            fontweight='bold',
+        )
 
     axes[0].set_ylabel('Count', fontsize=12)
     axes[0].set_title('Absolute Distribution', fontsize=13, fontweight='bold')
     axes[0].grid(True, alpha=0.3, axis='y')
 
-    axes[1].pie(counts, labels=classes, autopct='%1.1f%%', colors=colors,
-               startangle=90, textprops={'fontsize': 12, 'fontweight': 'bold'})
+    axes[1].pie(
+        counts,
+        labels=classes,
+        autopct='%1.1f%%',
+        colors=colors,
+        startangle=90,
+        textprops={'fontsize': 12, 'fontweight': 'bold'},
+    )
     axes[1].set_title('Relative Distribution', fontsize=13, fontweight='bold')
 
     plt.suptitle(title, fontsize=16, fontweight='bold')
@@ -337,7 +385,7 @@ def plot_class_distribution(class_counts, save_path=None, title="Class Distribut
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        logger.info(f"Saved class distribution to {save_path}")
+        logger.info(f'Saved class distribution to {save_path}')
         plt.close()
     else:
         plt.show()
@@ -372,12 +420,12 @@ def plot_comprehensive_report(metrics_dict, save_path=None, run_metadata=None):
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.axis('off')
     metrics_text = (
-        f"Accuracy: {metrics_dict.get('accuracy', 0):.4f}\n"
-        f"Precision: {metrics_dict.get('precision', 0):.4f}\n"
-        f"Recall: {metrics_dict.get('recall', 0):.4f}\n"
-        f"F1-Score: {metrics_dict.get('f1', 0):.4f}\n"
-        f"ROC AUC: {metrics_dict.get('roc_auc', 0):.4f}\n"
-        f"Confusion Matrix: {metrics_dict.get('confusion_matrix', [])}"
+        f'Accuracy: {metrics_dict.get("accuracy", 0):.4f}\n'
+        f'Precision: {metrics_dict.get("precision", 0):.4f}\n'
+        f'Recall: {metrics_dict.get("recall", 0):.4f}\n'
+        f'F1-Score: {metrics_dict.get("f1", 0):.4f}\n'
+        f'ROC AUC: {metrics_dict.get("roc_auc", 0):.4f}\n'
+        f'Confusion Matrix: {metrics_dict.get("confusion_matrix", [])}'
     )
     ax2.text(
         0.05,
@@ -388,7 +436,7 @@ def plot_comprehensive_report(metrics_dict, save_path=None, run_metadata=None):
         va='center',
         ha='left',
         family='monospace',
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.85, edgecolor='gray')
+        bbox=dict(boxstyle='round', facecolor='white', alpha=0.85, edgecolor='gray'),
     )
 
     ax3 = fig.add_subplot(gs[1, :])
@@ -407,9 +455,16 @@ def plot_comprehensive_report(metrics_dict, save_path=None, run_metadata=None):
     in crack detection tasks.
     """
 
-    ax3.text(0.05, 0.95, summary_text, transform=ax3.transAxes,
-            fontsize=11, verticalalignment='top', family='monospace',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    ax3.text(
+        0.05,
+        0.95,
+        summary_text,
+        transform=ax3.transAxes,
+        fontsize=11,
+        verticalalignment='top',
+        family='monospace',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+    )
 
     plt.suptitle('Comprehensive Model Report', fontsize=16, fontweight='bold')
 
@@ -417,7 +472,7 @@ def plot_comprehensive_report(metrics_dict, save_path=None, run_metadata=None):
         meta_lines = []
         for key in ['run_name', 'epochs', 'batch_size', 'imgsz', 'device', 'dataset_root']:
             if key in run_metadata and run_metadata[key] is not None:
-                meta_lines.append(f"{key}: {run_metadata[key]}")
+                meta_lines.append(f'{key}: {run_metadata[key]}')
         if meta_lines:
             fig.text(
                 0.5,
@@ -426,14 +481,14 @@ def plot_comprehensive_report(metrics_dict, save_path=None, run_metadata=None):
                 ha='center',
                 va='bottom',
                 fontsize=10,
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.85, edgecolor='gray')
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.85, edgecolor='gray'),
             )
     plt.tight_layout()
 
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        logger.info(f"Saved comprehensive report to {save_path}")
+        logger.info(f'Saved comprehensive report to {save_path}')
         plt.close()
     else:
         plt.show()
@@ -444,7 +499,7 @@ def save_detection_comparison(original_path, annotated_path, save_path=None):
     annot = cv2.imread(str(annotated_path))
 
     if orig is None or annot is None:
-        logger.error("Failed to load images for comparison")
+        logger.error('Failed to load images for comparison')
         return
 
     orig_rgb = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
@@ -465,7 +520,7 @@ def save_detection_comparison(original_path, annotated_path, save_path=None):
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        logger.info(f"Saved comparison to {save_path}")
+        logger.info(f'Saved comparison to {save_path}')
         plt.close()
     else:
         plt.show()
