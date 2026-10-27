@@ -5,8 +5,8 @@ paths:
   raw_videos: "data/raw"
   generated_videos: "data/videos"
   dataset_root: "data/dataset"
-  deepcrack: "../concrete_crack_detection/data/external/deepcrack"
-  sdnet: "../concrete_crack_detection/data/external/sdnet2018"
+  deepcrack: "data/external/DeepCrack"
+  sdnet: "data/external/sdnet2018"
   outputs: "outputs"
   pretrained_models: "src/models/pretrained"
 
@@ -40,4 +40,3 @@ inference:
   iou_threshold: 0.5
   draw_confident: true
   output_video_fps: 20
-

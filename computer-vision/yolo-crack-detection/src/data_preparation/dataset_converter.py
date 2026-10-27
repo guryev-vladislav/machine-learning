@@ -17,23 +17,30 @@ except ImportError as e:
 
 
 class DatasetConverter:
-    def __init__(self, config=None):
+    def __init__(self, config=None, auto_download=True):
         self.config = config or Config()
         self.random = random.Random(self.config.RANDOM_SEED)
+        self.auto_download = auto_download
 
     def build_yolo_dataset(self):
         logger.info('Building YOLO classification dataset...')
 
         self.config.create_directories()
+
+        # Auto-download datasets if needed
+        if self.auto_download:
+            self._ensure_datasets()
+
         crack_images = []
         non_crack_images = []
 
         logger.info('Collecting DeepCrack images (crack)...')
-        rgb_dir = self.config.DEEPCRACK_PATH / 'rgb'
-        if rgb_dir.exists():
-            images = self._get_images_from_dir(rgb_dir)
-            crack_images.extend(images)
-            logger.info(f'  Found {len(images)} crack images')
+        for sub_dir in ['train_lab', 'train_img', 'test_lab', 'test_img', 'rgb']:
+            dc_dir = self.config.DEEPCRACK_PATH / sub_dir
+            if dc_dir.exists():
+                images = self._get_images_from_dir(dc_dir)
+                crack_images.extend(images)
+                logger.info(f'  Found {len(images)} crack images in {sub_dir}')
 
         logger.info('Collecting SDNET cracked images...')
         for category in ['Decks', 'Pavements', 'Walls']:
@@ -70,6 +77,19 @@ class DatasetConverter:
         self._split_and_copy(non_crack_images, 'no_crack')
 
         logger.info('YOLO dataset created successfully!')
+
+    def _ensure_datasets(self):
+        """Ensure all required datasets are downloaded."""
+        from src.data_preparation.deepcrack_downloader import DeepCrackDownloader
+        from src.data_preparation.sdnet_downloader import SDNETDownloader
+
+        # Download DeepCrack
+        dc_downloader = DeepCrackDownloader(self.config.DEEPCRACK_PATH)
+        dc_downloader.ensure_downloaded()
+
+        # Download SDNET
+        sdnet_downloader = SDNETDownloader(self.config.SDNET_PATH)
+        sdnet_downloader.ensure_downloaded()
 
     def _get_images_from_dir(self, directory):
         exts = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.PNG']
@@ -133,8 +153,16 @@ class DatasetConverter:
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Build YOLO classification dataset')
+    parser.add_argument(
+        '--skip-download', action='store_true', help='Skip automatic dataset download'
+    )
+    args = parser.parse_args()
+
     config = Config()
-    converter = DatasetConverter(config)
+    converter = DatasetConverter(config=config, auto_download=not args.skip_download)
     converter.build_yolo_dataset()
     converter.get_dataset_info()
 
